@@ -2,15 +2,18 @@
 
 export const T = {
   displayLg:   { fontFamily:'Plus Jakarta Sans, sans-serif', fontSize:48, fontWeight:800, lineHeight:1.1, letterSpacing:'-0.02em' },
+  headlineLg:  { fontFamily:'Plus Jakarta Sans, sans-serif', fontSize:30, fontWeight:700, lineHeight:1.2, letterSpacing:'-0.01em' },
   headlineMd:  { fontFamily:'Plus Jakarta Sans, sans-serif', fontSize:24, fontWeight:700, lineHeight:1.3 },
   headlineSm:  { fontFamily:'Plus Jakarta Sans, sans-serif', fontSize:18, fontWeight:600, lineHeight:1.4 },
   titleLg:     { fontFamily:'Plus Jakarta Sans, sans-serif', fontSize:22, fontWeight:600, lineHeight:1.27 },
   titleMd:     { fontFamily:'Inter, sans-serif', fontSize:16, fontWeight:500, lineHeight:1.5, letterSpacing:'0.01em' },
   bodyLg:      { fontFamily:'Inter, sans-serif', fontSize:16, fontWeight:400, lineHeight:1.5 },
+  bodyMd:      { fontFamily:'Inter, sans-serif', fontSize:15, fontWeight:400, lineHeight:1.47 },
   bodySm:      { fontFamily:'Inter, sans-serif', fontSize:14, fontWeight:400, lineHeight:1.43 },
   labelLg:     { fontFamily:'Inter, sans-serif', fontSize:14, fontWeight:500, lineHeight:1.43, letterSpacing:'0.01em' },
   labelMd:     { fontFamily:'Inter, sans-serif', fontSize:12, fontWeight:500, lineHeight:1.33, letterSpacing:'0.04em' },
   labelSm:     { fontFamily:'Inter, sans-serif', fontSize:11, fontWeight:500, lineHeight:1.45, letterSpacing:'0.04em' },
+  labelXs:     { fontFamily:'Inter, sans-serif', fontSize:10, fontWeight:500, lineHeight:1.4, letterSpacing:'0.04em' },
 };
 
 export const C = {

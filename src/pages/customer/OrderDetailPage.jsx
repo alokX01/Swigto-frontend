@@ -75,7 +75,7 @@ export default function OrderDetailPage() {
         </div>
         <p style={{ ...T.bodySm, color: C.onSurfaceVariant, margin: 0 }}>
           <Clock size={14} style={{ marginRight: 6, display: 'inline' }} />
-          Placed on {formatDate(currentOrder.created_at)}
+          Placed on {formatDate(currentOrder.placed_at)}
         </p>
       </div>
 
@@ -145,14 +145,14 @@ export default function OrderDetailPage() {
           <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: `1px solid ${C.outlineVariant}` }}>
             <div>
               <p style={{ ...T.labelMd, fontWeight: 600, color: C.onSurface, margin: 0 }}>
-                {item.menu_item_name}
+                {item.item_name}
               </p>
               <p style={{ ...T.bodySm, color: C.onSurfaceVariant, margin: '4px 0 0 0' }}>
                 Qty: {item.quantity} {item.variant_name && `• ${item.variant_name}`}
               </p>
             </div>
             <p style={{ ...T.labelMd, fontWeight: 700, color: C.onSurface }}>
-              {formatCurrency(item.subtotal || item.unit_price * item.quantity)}
+              {formatCurrency(item.subtotal || item.price * item.quantity)}
             </p>
           </div>
         ))}

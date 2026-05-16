@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ArrowRight, Clock, MapPin, Package, AlertCircle } from 'lucide-react';
@@ -73,7 +73,7 @@ export default function OrdersPage() {
     return (
       <div style={{ maxWidth: 1280, margin: '0 auto', padding: `${S.gutter}px`, textAlign: 'center' }}>
         <AlertCircle size={48} color={C.error} style={{ margin: '24px auto' }} />
-        <p style={{ ...T.bodyMd, color: C.onSurfaceVariant }}>{getApiError(error, 'Failed to load orders')}</p>
+        <p style={{ ...T.bodySm, color: C.onSurfaceVariant }}>{getApiError(error, 'Failed to load orders')}</p>
       </div>
     );
   }
@@ -98,7 +98,7 @@ export default function OrdersPage() {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 }}>
         <div>
-          <h1 style={{ ...T.headlineLg, color: C.onSurface, margin: 0 }}>My Orders</h1>
+          <h1 style={{ ...T.headlineMd, color: C.onSurface, margin: 0 }}>My Orders</h1>
           <p style={{ ...T.bodySm, color: C.onSurfaceVariant, margin: '8px 0 0 0' }}>
             {orders.length} total â€¢ {activeCount} active
           </p>
@@ -174,7 +174,7 @@ export default function OrdersPage() {
                   </h3>
                   <span
                     style={{
-                      ...T.labelXs,
+                      ...T.labelSm,
                       padding: '4px 12px',
                       borderRadius: 20,
                       background: STATUS_COLORS[order.status]?.bg || C.surfaceContainer,
@@ -186,11 +186,11 @@ export default function OrdersPage() {
                   </span>
                 </div>
                 <p style={{ ...T.bodySm, color: C.onSurfaceVariant, margin: '0 0 8px 0' }}>
-                  Order #{order.id?.slice(-6).toUpperCase() || 'N/A'} â€¢ {formatDate(order.created_at || new Date())}
+                  Order #{order.id?.slice(-6).toUpperCase() || 'N/A'} • {formatDate(order.placed_at || new Date())}
                 </p>
                 <div style={{ display: 'flex', gap: 16 }}>
                   <span style={{ ...T.labelSm, color: C.onSurfaceVariant }}>
-                    {order.items?.length || 0} items
+                    {order.item_count || 0} items
                   </span>
                   <span style={{ ...T.labelSm, color: C.onSurfaceVariant }}>
                     {order.payment_method || 'Payment'}

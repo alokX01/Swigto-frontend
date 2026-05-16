@@ -1,9 +1,11 @@
 import { Link, useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect } from 'react';
 import { ArrowLeft, Bike, CheckCircle, Clock, CookingPot, Home, MapPin, PackageCheck, Store } from 'lucide-react';
 import { ordersAPI } from '@/api/orders';
 import { formatDateTime, getStatusInfo, getStatusStep } from '@/lib/utils';
 import { C, S, badge } from '@/lib/stitch';
+import { subscribeToOrder } from '@/lib/socket';
 
 const STATUS_COLORS = {
   PLACED: ['#DBEAFE', '#1D4ED8'],
