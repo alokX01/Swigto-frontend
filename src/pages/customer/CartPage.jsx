@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ArrowLeft, Minus, Plus, Trash2, ShoppingBag, ChevronRight, ShieldCheck } from 'lucide-react';
@@ -126,12 +126,12 @@ export default function CartPage() {
           {cartItems.map((item) => (
             <div key={item.id} style={{ display: 'flex', gap: 16, padding: 16, background: C.surface, border: `1px solid ${C.outlineVariant}`, borderRadius: 12, marginBottom: 12, opacity: busyItem === item.id ? 0.6 : 1 }}>
               <div style={{ width: 80, height: 80, borderRadius: 8, background: C.surfaceContainer, flexShrink: 0, overflow: 'hidden' }}>
-                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: `${C.saffron}15`, borderRadius: 8 }}><ShoppingBag size={28} color={C.saffron} /></div>
+                {item.menu_item_image ? <img src={item.menu_item_image} alt={item.menu_item_name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32 }}>ðŸ½ï¸</div>}
               </div>
               <div style={{ flex: 1 }}>
-                <h3 style={{ ...T.labelLg, fontWeight: 700, color: C.onSurface, margin: '0 0 4px 0' }}>{item.item_name}</h3>
-                {item.variant_name && <p style={{ ...T.bodySm, color: C.onSurfaceVariant, margin: 0 }}>Variant: {item.variant_name}</p>}
-                <p style={{ ...T.labelMd, color: C.saffron, fontWeight: 700, margin: '8px 0 0 0' }}>{formatCurrency(toNumber(item.unit_price) * (item.quantity || 1))}</p>
+                <h3 style={{ ...T.labelLg, fontWeight: 700, color: C.onSurface, margin: '0 0 4px 0' }}>{item.menu_item_name}</h3>
+                {item.variant && <p style={{ ...T.bodySm, color: C.onSurfaceVariant, margin: 0 }}>Variant: {item.variant}</p>}
+                <p style={{ ...T.labelMd, color: C.saffron, fontWeight: 700, margin: '8px 0 0 0' }}>{formatCurrency(toNumber(item.price) * (item.quantity || 1))}</p>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${C.outlineVariant}`, borderRadius: 8, padding: '4px 8px' }}>
                 <button onClick={() => handleQty(item, -1)} disabled={busyItem === item.id} style={{ width: 28, height: 28, border: 'none', background: 'transparent', cursor: 'pointer', color: C.saffron }}><Minus size={16} /></button>

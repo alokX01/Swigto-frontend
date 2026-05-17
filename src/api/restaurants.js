@@ -11,8 +11,6 @@ export const restaurantsAPI = {
   toggleRestaurantStatus: (id) =>
     api.patch(`/restaurants/${id}/toggle-status/`),
   getMyRestaurant: () => api.get("/restaurants/mine/"),
-  getMine: () => api.get("/restaurants/mine/"),
-  toggleStatus: (id) => api.patch(`/restaurants/${id}/toggle-status/`),
 
   // Categories CRUD
   getCategories: (restaurantId, params) =>
