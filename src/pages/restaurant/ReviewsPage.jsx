@@ -6,7 +6,10 @@ import { formatDateTime } from '@/lib/utils';
 import { T, C, card } from '@/lib/stitch';
 
 export default function RestaurantReviewsPage() {
-  const { data: rData } = useQuery({ queryKey: ['myRestaurant'], queryFn: () => restaurantsAPI.getMine() });
+  const { data: rData } = useQuery({ queryKey: ['myRestaurant'], queryFn: () => restaurantsAPI.getMyRestaurant().catch(err => {
+    if (err.response?.status === 404) return { data: null };
+    throw err;
+  }) });
   const rId = rData?.data?.id;
   const { data: reviewsData } = useQuery({ queryKey: ['reviews', rId], queryFn: () => reviewsAPI.getRestaurantReviews(rId, { page_size: 30 }), enabled: !!rId });
   const reviews = reviewsData?.data?.results || reviewsData?.data || [];

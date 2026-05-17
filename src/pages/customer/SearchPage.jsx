@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { searchAPI } from '@/api/restaurants';
 import { Search as SearchIcon, Star, Clock, SlidersHorizontal, X } from 'lucide-react';
 import { CUISINE_TYPES, debounce, formatCurrency } from '@/lib/utils';
+import { useDebounce } from '@/lib/hooks';
 import { useLocationStore } from '@/store/locationStore';
 import { T, C, card, cardHover } from '@/lib/stitch';
 
@@ -13,6 +14,7 @@ export default function SearchPage() {
   const initialQuery = searchParams.get('q') || '';
   
   const [query, setQuery] = useState(initialQuery);
+  const debouncedQuery = useDebounce(query, 500);
   const [selectedCuisines, setSelectedCuisines] = useState([]);
   const [showFilters, setShowFilters] = useState(false);
   
@@ -22,15 +24,15 @@ export default function SearchPage() {
   const selectedCity = useLocationStore((s) => s.selectedCity);
 
   const { data: restData, isLoading: loadingRest } = useQuery({
-    queryKey: ['searchRestaurants', initialQuery, selectedCuisines, selectedCity],
-    queryFn: () => searchAPI.restaurants({ q: initialQuery || undefined, cuisine_type: selectedCuisines.length > 0 ? selectedCuisines : undefined, city: selectedCity }),
-    enabled: !!initialQuery,
+    queryKey: ['searchRestaurants', debouncedQuery, selectedCuisines, selectedCity],
+    queryFn: () => searchAPI.restaurants({ q: debouncedQuery || undefined, cuisine_type: selectedCuisines.length > 0 ? selectedCuisines : undefined, city: selectedCity }),
+    enabled: !!debouncedQuery,
   });
 
   const { data: menuData, isLoading: loadingMenu } = useQuery({
-    queryKey: ['searchMenuItems', initialQuery],
-    queryFn: () => searchAPI.menuItems({ q: initialQuery }),
-    enabled: !!initialQuery,
+    queryKey: ['searchMenuItems', debouncedQuery],
+    queryFn: () => searchAPI.menuItems({ q: debouncedQuery }),
+    enabled: !!debouncedQuery,
   });
 
   const restaurants = restData?.data?.results || restData?.data || [];
@@ -103,11 +105,11 @@ export default function SearchPage() {
         </div>
       )}
 
-      {initialQuery ? (
+      {debouncedQuery ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
           {/* Menu Items Section */}
           <section>
-            <h2 style={{ ...T.headlineSm, color: C.onSurface, marginBottom: 16 }}>Dishes matching "{initialQuery}"</h2>
+            <h2 style={{ ...T.headlineSm, color: C.onSurface, marginBottom: 16 }}>Dishes matching "{debouncedQuery}"</h2>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
               {loadingMenu ? [1,2].map(i => <div key={i} style={{ ...card, height: 120, borderRadius: 16, animation: 'skeleton 1.5s ease-in-out infinite', background: C.surfaceContainer }} />) :
                 menuItems.length === 0 ? <p style={{ ...T.bodySm, color: C.outline }}>No dishes found.</p> :
@@ -118,7 +120,7 @@ export default function SearchPage() {
 
           {/* Restaurants Section */}
           <section>
-            <h2 style={{ ...T.headlineSm, color: C.onSurface, marginBottom: 16 }}>Restaurants matching "{initialQuery}"</h2>
+            <h2 style={{ ...T.headlineSm, color: C.onSurface, marginBottom: 16 }}>Restaurants matching "{debouncedQuery}"</h2>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
               {loadingRest ? [1,2].map(i => <div key={i} style={{ ...card, height: 100, borderRadius: 16, animation: 'skeleton 1.5s ease-in-out infinite', background: C.surfaceContainer }} />) :
                 restaurants.length === 0 ? <p style={{ ...T.bodySm, color: C.outline }}>No restaurants found.</p> :

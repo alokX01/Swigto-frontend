@@ -11,7 +11,10 @@ const TEAL = '#0D9488';
 export default function MenuPage() {
   const [showForm, setShowForm] = useState(false);
   const queryClient = useQueryClient();
-  const { data: rData } = useQuery({ queryKey: ['myRestaurant'], queryFn: () => restaurantsAPI.getMine() });
+  const { data: rData } = useQuery({ queryKey: ['myRestaurant'], queryFn: () => restaurantsAPI.getMyRestaurant().catch(err => {
+    if (err.response?.status === 404) return { data: null };
+    throw err;
+  }) });
   const rId = rData?.data?.id;
   const { data: catData } = useQuery({ queryKey: ['categories', rId], queryFn: () => restaurantsAPI.getCategories(rId, { page_size: 50 }), enabled: !!rId });
   const { data: menuData } = useQuery({ queryKey: ['menuItems', rId], queryFn: () => restaurantsAPI.getMenuItems(rId, { page_size: 100 }), enabled: !!rId });

@@ -69,11 +69,11 @@ export default function LoginPage() {
     setBusy(false);
   };
 
-  const Inp = ({ reg, name, type='text', label, placeholder, err, icon:Ic, showToggle }) => (
+  const Inp = ({ reg, name, type='text', label, placeholder, err, icon:Ic, showToggle, onInput }) => (
     <div style={{ marginBottom:20 }}>
       <label htmlFor={name} style={{ ...T.labelMd, display:'block', color:'#494551', marginBottom:6, textTransform:'uppercase' }}>{label}</label>
       <div style={{ position:'relative' }}>
-        <input id={name} {...reg(name)} type={showToggle ? (showPw?'text':'password') : type} placeholder={placeholder}
+        <input id={name} {...reg(name)} type={showToggle ? (showPw?'text':'password') : type} placeholder={placeholder} onInput={onInput}
           style={{ width:'100%', height:48, padding:'0 16px', paddingRight: (showToggle||Ic)?48:16,
             background:'#f8f2fa', border:'1px solid #cbc4d2', borderRadius:12,
             ...T.bodyLg, color:'#1d1b20', outline:'none', transition:'border .15s',
@@ -213,7 +213,7 @@ export default function LoginPage() {
             <form onSubmit={regForm.handleSubmit(onRegister)} style={{ animation:'fade-in .25s ease-out' }}>
               <Inp reg={regForm.register} name="name" label="Full Name" placeholder="John Doe" err={regForm.formState.errors.name} />
               <Inp reg={regForm.register} name="email" type="email" label="Email Address" placeholder="name@example.com" err={regForm.formState.errors.email} icon={Mail} />
-              <Inp reg={regForm.register} name="phone" type="tel" label="Phone Number" placeholder="+91 9876543210" err={regForm.formState.errors.phone} />
+              <Inp reg={regForm.register} name="phone" type="tel" label="Phone Number" placeholder="+91 9876543210" err={regForm.formState.errors.phone} onInput={(e) => { e.target.value = e.target.value.replace(/[^\d+]/g, ''); }} />
               <Inp reg={regForm.register} name="password" label="Password" placeholder="min. 8 characters" err={regForm.formState.errors.password} showToggle />
 
               {role==='Delivery Agent' && (

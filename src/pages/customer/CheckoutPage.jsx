@@ -271,7 +271,7 @@ export default function CheckoutPage() {
                   </label>
                   <label>
                     <span>Receiver phone</span>
-                    <input {...addressForm.register('receiver_phone')} placeholder="9876543210" style={fieldStyle} />
+                    <input {...addressForm.register('receiver_phone')} placeholder="9876543210" style={fieldStyle} onInput={(e) => { e.target.value = e.target.value.replace(/[^\d+]/g, ''); }} />
                     <FieldError message={addressForm.formState.errors.receiver_phone?.message} />
                   </label>
                 </div>

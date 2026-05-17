@@ -6,6 +6,7 @@ import { restaurantsAPI } from '@/api/restaurants';
 import { useCartStore } from '@/store/cartStore';
 import { useAuthStore } from '@/store/authStore';
 import { formatCurrency } from '@/lib/utils';
+import { useDebounce } from '@/lib/hooks';
 import { T, C, S, card } from '@/lib/stitch';
 import { toast } from 'sonner';
 
@@ -15,6 +16,7 @@ export default function RestaurantPage() {
   const location = useLocation();
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [searchMenu, setSearchMenu] = useState('');
+  const debouncedSearchMenu = useDebounce(searchMenu, 300);
   const addItem = useCartStore((s) => s.addItem);
   const cartItems = useCartStore((s) => s.items);
   const cart = useCartStore((s) => s.cart);
@@ -22,7 +24,7 @@ export default function RestaurantPage() {
 
   const { data: restaurant, isLoading: loadingR } = useQuery({ queryKey: ['restaurant', id], queryFn: () => restaurantsAPI.get(id) });
   const { data: categoriesData } = useQuery({ queryKey: ['categories', id], queryFn: () => restaurantsAPI.getCategories(id, { page_size: 50 }) });
-  const { data: menuData, isLoading: loadingMenu } = useQuery({ queryKey: ['menuItems', id, selectedCategory, searchMenu], queryFn: () => restaurantsAPI.getMenuItems(id, { category: selectedCategory || undefined, search: searchMenu || undefined, page_size: 100 }) });
+  const { data: menuData, isLoading: loadingMenu } = useQuery({ queryKey: ['menuItems', id, selectedCategory, debouncedSearchMenu], queryFn: () => restaurantsAPI.getMenuItems(id, { category: selectedCategory || undefined, search: debouncedSearchMenu || undefined, page_size: 100 }) });
 
   const r = restaurant?.data;
   const categories = categoriesData?.data?.results || categoriesData?.data || [];

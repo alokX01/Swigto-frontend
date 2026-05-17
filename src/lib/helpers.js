@@ -26,10 +26,26 @@ export function getRoleRedirectPath(role) {
 }
 
 export function getApiError(error, defaultMsg = 'Something went wrong') {
-  if (error?.response?.data?.detail) return error.response.data.detail;
-  if (error?.response?.data?.message) return error.response.data.message;
-  if (error?.response?.data?.error) return error.response.data.error;
-  if (error?.message) return error.message;
+  if (error?.response?.data) {
+    const data = error.response.data;
+    if (typeof data === 'string') return data;
+    if (typeof data?.detail === 'string') return data.detail;
+    if (typeof data?.message === 'string') return data.message;
+    if (typeof data?.error === 'string') return data.error;
+    
+    // Check if it's an object with validation errors (e.g. { phone: ["must be unique"] })
+    if (typeof data === 'object') {
+      const firstKey = Object.keys(data)[0];
+      if (firstKey && Array.isArray(data[firstKey])) {
+        return `${firstKey}: ${data[firstKey][0]}`;
+      }
+      if (data.error && typeof data.error === 'object' && data.error.message) {
+        return data.error.message;
+      }
+      return JSON.stringify(data);
+    }
+  }
+  if (error?.message && typeof error.message === 'string') return error.message;
   return defaultMsg;
 }
 

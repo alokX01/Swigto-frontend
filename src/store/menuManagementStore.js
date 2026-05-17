@@ -21,7 +21,7 @@ export const useMenuManagementStore = create((set) => ({
   fetchCategories: async (restaurantId, params = {}) => {
     set({ isLoading: true, error: null });
     try {
-      const res = await restaurantAPI.getCategories(restaurantId, params);
+      const res = await restaurantsAPI.getCategories(restaurantId, params);
       const categories = res.data.results || res.data;
       set({ categories, isLoading: false });
       return categories;
@@ -34,7 +34,7 @@ export const useMenuManagementStore = create((set) => ({
   createCategory: async (restaurantId, data) => {
     set({ isLoading: true, error: null });
     try {
-      const res = await restaurantAPI.createCategory(restaurantId, data);
+      const res = await restaurantsAPI.createCategory(restaurantId, data);
       set((state) => ({
         categories: [...state.categories, res.data],
         isLoading: false,
@@ -49,7 +49,7 @@ export const useMenuManagementStore = create((set) => ({
   updateCategory: async (restaurantId, categoryId, data) => {
     set({ isLoading: true, error: null });
     try {
-      const res = await restaurantAPI.updateCategory(restaurantId, categoryId, data);
+      const res = await restaurantsAPI.updateCategory(restaurantId, categoryId, data);
       set((state) => ({
         categories: state.categories.map((cat) => (cat.id === categoryId ? res.data : cat)),
         isLoading: false,
@@ -64,7 +64,7 @@ export const useMenuManagementStore = create((set) => ({
   patchCategory: async (restaurantId, categoryId, data) => {
     set({ isLoading: true, error: null });
     try {
-      const res = await restaurantAPI.patchCategory(restaurantId, categoryId, data);
+      const res = await restaurantsAPI.patchCategory(restaurantId, categoryId, data);
       set((state) => ({
         categories: state.categories.map((cat) => (cat.id === categoryId ? res.data : cat)),
         isLoading: false,
@@ -79,7 +79,7 @@ export const useMenuManagementStore = create((set) => ({
   deleteCategory: async (restaurantId, categoryId) => {
     set({ isLoading: true, error: null });
     try {
-      await restaurantAPI.deleteCategory(restaurantId, categoryId);
+      await restaurantsAPI.deleteCategory(restaurantId, categoryId);
       set((state) => ({
         categories: state.categories.filter((cat) => cat.id !== categoryId),
         isLoading: false,
@@ -94,7 +94,7 @@ export const useMenuManagementStore = create((set) => ({
   fetchMenuItems: async (restaurantId, params = {}) => {
     set({ isLoading: true, error: null });
     try {
-      const res = await restaurantAPI.getMenuItems(restaurantId, params);
+      const res = await restaurantsAPI.getMenuItems(restaurantId, params);
       const menuItems = res.data.results || res.data;
       set({ menuItems, isLoading: false });
       return menuItems;
@@ -107,7 +107,7 @@ export const useMenuManagementStore = create((set) => ({
   fetchMenuItem: async (restaurantId, itemId) => {
     set({ isLoading: true, error: null });
     try {
-      const res = await restaurantAPI.getMenuItem(restaurantId, itemId);
+      const res = await restaurantsAPI.getMenuItem(restaurantId, itemId);
       set({ selectedMenuItem: res.data, isLoading: false });
       return res.data;
     } catch (err) {
@@ -119,7 +119,7 @@ export const useMenuManagementStore = create((set) => ({
   createMenuItem: async (restaurantId, data) => {
     set({ isLoading: true, error: null });
     try {
-      const res = await restaurantAPI.createMenuItem(restaurantId, data);
+      const res = await restaurantsAPI.createMenuItem(restaurantId, data);
       set((state) => ({
         menuItems: [...state.menuItems, res.data],
         isLoading: false,
@@ -134,7 +134,7 @@ export const useMenuManagementStore = create((set) => ({
   updateMenuItem: async (restaurantId, itemId, data) => {
     set({ isLoading: true, error: null });
     try {
-      const res = await restaurantAPI.updateMenuItem(restaurantId, itemId, data);
+      const res = await restaurantsAPI.updateMenuItem(restaurantId, itemId, data);
       set((state) => ({
         menuItems: state.menuItems.map((item) => (item.id === itemId ? res.data : item)),
         selectedMenuItem: state.selectedMenuItem?.id === itemId ? res.data : state.selectedMenuItem,
@@ -150,7 +150,7 @@ export const useMenuManagementStore = create((set) => ({
   patchMenuItem: async (restaurantId, itemId, data) => {
     set({ isLoading: true, error: null });
     try {
-      const res = await restaurantAPI.patchMenuItem(restaurantId, itemId, data);
+      const res = await restaurantsAPI.patchMenuItem(restaurantId, itemId, data);
       set((state) => ({
         menuItems: state.menuItems.map((item) => (item.id === itemId ? res.data : item)),
         selectedMenuItem: state.selectedMenuItem?.id === itemId ? res.data : state.selectedMenuItem,

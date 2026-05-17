@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { restaurantsAPI } from '@/api/restaurants';
 import { ordersAPI } from '@/api/orders';
 import { ShoppingBag, DollarSign, Clock, Star, Power } from 'lucide-react';
@@ -9,12 +10,23 @@ import { T, C, card } from '@/lib/stitch';
 const TEAL = '#0D9488';
 
 export default function RestaurantDashboard() {
-  const { data: restaurant, refetch } = useQuery({ queryKey: ['myRestaurant'], queryFn: () => restaurantsAPI.getMine() });
-  const { data: ordersData } = useQuery({ queryKey: ['restaurantOrders'], queryFn: () => ordersAPI.restaurantOrders({ page_size: 5 }) });
+  const navigate = useNavigate();
+  const { data: restaurant, refetch } = useQuery({ 
+    queryKey: ['myRestaurant'], 
+    queryFn: () => restaurantsAPI.getMyRestaurant().catch(err => {
+      if (err.response?.status === 404) return { data: null };
+      throw err;
+    }) 
+  });
   const r = restaurant?.data;
+  const { data: ordersData } = useQuery({ 
+    queryKey: ['restaurantOrders', r?.id], 
+    queryFn: () => ordersAPI.restaurantOrders(r.id, { page_size: 5 }),
+    enabled: !!r?.id
+  });
   const orders = ordersData?.data?.results || ordersData?.data || [];
 
-  const toggleStatus = async () => { try { await restaurantsAPI.toggleStatus(r.id); toast.success(`Restaurant ${r.is_open ? 'closed' : 'opened'}!`); refetch(); } catch { toast.error('Failed'); } };
+  const toggleStatus = async () => { try { await restaurantsAPI.toggleRestaurantStatus(r.id); toast.success(`Restaurant ${r.is_open ? 'closed' : 'opened'}!`); refetch(); } catch { toast.error('Failed'); } };
 
   const stats = [
     { icon: ShoppingBag, label: 'Total Orders', value: orders.length || 0, bg: '#EFF6FF', ic: '#2563EB' },
@@ -22,6 +34,30 @@ export default function RestaurantDashboard() {
     { icon: Star, label: 'Rating', value: r?.average_rating ? Number(r.average_rating).toFixed(1) : 'N/A', bg: '#FFFBEB', ic: '#D97706' },
     { icon: Clock, label: 'Avg Prep Time', value: `${r?.average_preparation_time || 30} min`, bg: '#F5F3FF', ic: '#7C3AED' },
   ];
+
+  if (!r) {
+    return (
+      <div style={{ maxWidth: 1000, margin: '0 auto', padding: '48px 24px', textAlign: 'center' }}>
+        <h1 style={{ ...T.headlineMd, color: C.onSurface, marginBottom: 8 }}>Welcome to Swigto Portal!</h1>
+        <p style={{ ...T.bodyMd, color: C.onSurfaceVariant, marginBottom: 24 }}>You haven't registered your restaurant yet.</p>
+        <button 
+          onClick={() => navigate('/restaurant/management')}
+          style={{
+            padding: '12px 24px',
+            background: C.saffron || '#F26E21',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 12,
+            ...T.labelLg,
+            fontWeight: 600,
+            cursor: 'pointer'
+          }}
+        >
+          Register Restaurant
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div>

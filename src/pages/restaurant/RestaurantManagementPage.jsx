@@ -39,7 +39,7 @@ const restaurantSchema = z.object({
 
 export default function RestaurantManagementPage() {
   const navigate = useNavigate();
-  const { restaurant, isLoading, error, fetchMyRestaurant, updateRestaurant, toggleRestaurantStatus } = useRestaurantOwnerStore();
+  const { restaurant, isLoading, error, fetchMyRestaurant, updateRestaurant, createRestaurant, toggleRestaurantStatus } = useRestaurantOwnerStore();
   const [isEditing, setIsEditing] = useState(false);
   const [isTogglingStatus, setIsTogglingStatus] = useState(false);
 
@@ -80,11 +80,16 @@ export default function RestaurantManagementPage() {
 
   const onSubmit = async (data) => {
     try {
-      await updateRestaurant(restaurant.id, data);
-      toast.success('Restaurant updated successfully');
-      setIsEditing(false);
+      if (restaurant) {
+        await updateRestaurant(restaurant.id, data);
+        toast.success('Restaurant updated successfully');
+        setIsEditing(false);
+      } else {
+        await createRestaurant(data);
+        toast.success('Restaurant registered successfully!');
+      }
     } catch (err) {
-      toast.error(getApiError(err, 'Failed to update restaurant'));
+      toast.error(getApiError(err, 'Failed to save restaurant'));
     }
   };
 
@@ -122,9 +127,287 @@ export default function RestaurantManagementPage() {
 
   if (!restaurant) {
     return (
-      <div style={{ maxWidth: 1000, margin: '0 auto', padding: `${S.gutter}px`, textAlign: 'center' }}>
-        <UtensilsCrossed size={48} color={C.onSurfaceVariant} style={{ margin: '24px auto' }} />
-        <p style={{ ...T.bodyMd, color: C.onSurfaceVariant }}>No restaurant found. Create one first.</p>
+      <div style={{ maxWidth: 1000, margin: '0 auto', padding: `${S.gutter}px` }}>
+        <div style={{ background: C.surface, border: `1px solid ${C.outlineVariant}`, borderRadius: 12, padding: 24 }}>
+          <div style={{ textAlign: 'center', marginBottom: 32 }}>
+            <UtensilsCrossed size={48} color={C.saffron || '#F26E21'} style={{ margin: '0 auto 16px' }} />
+            <h1 style={{ ...T.headlineLg, color: C.onSurface, margin: 0 }}>Register Your Restaurant</h1>
+            <p style={{ ...T.bodySm, color: C.onSurfaceVariant, margin: '8px 0 0 0' }}>Join Swigto as a partner and reach thousands of customers!</p>
+          </div>
+          
+          <form onSubmit={form.handleSubmit(onSubmit)}>
+            {/* Basic Info */}
+            <div style={{ marginBottom: 24 }}>
+              <h3 style={{ ...T.labelMd, fontWeight: 700, color: C.onSurface, margin: '0 0 16px 0' }}>Basic Information</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+                <div>
+                  <label style={{ ...T.labelSm, color: C.onSurfaceVariant, display: 'block', marginBottom: 6, fontWeight: 600 }}>
+                    Restaurant Name *
+                  </label>
+                  <input
+                    {...form.register('name')}
+                    placeholder="Your restaurant name"
+                    style={{
+                      width: '100%',
+                      height: 44,
+                      padding: '8px 12px',
+                      background: '#fff',
+                      border: `1px solid ${C.outline}`,
+                      borderRadius: 8,
+                      ...T.bodySm,
+                      fontFamily: 'inherit',
+                    }}
+                  />
+                  {form.formState.errors.name && (
+                    <small style={{ color: C.error, display: 'block', marginTop: 4 }}>
+                      {form.formState.errors.name.message}
+                    </small>
+                  )}
+                </div>
+
+                <div>
+                  <label style={{ ...T.labelSm, color: C.onSurfaceVariant, display: 'block', marginBottom: 6, fontWeight: 600 }}>
+                    Cuisine Type *
+                  </label>
+                  <select
+                    {...form.register('cuisine_type')}
+                    style={{
+                      width: '100%',
+                      height: 44,
+                      padding: '8px 12px',
+                      background: '#fff',
+                      border: `1px solid ${C.outline}`,
+                      borderRadius: 8,
+                      ...T.bodySm,
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    <option value="">Select Cuisine</option>
+                    {CUISINE_TYPES.map((cuisine) => (
+                      <option key={cuisine.value} value={cuisine.value}>
+                        {cuisine.label}
+                      </option>
+                    ))}
+                  </select>
+                  {form.formState.errors.cuisine_type && (
+                    <small style={{ color: C.error, display: 'block', marginTop: 4 }}>
+                      {form.formState.errors.cuisine_type.message}
+                    </small>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ ...T.labelSm, color: C.onSurfaceVariant, display: 'block', marginBottom: 6, fontWeight: 600 }}>
+                  Description
+                </label>
+                <textarea
+                  {...form.register('description')}
+                  placeholder="Tell customers about your restaurant"
+                  style={{
+                    width: '100%',
+                    height: 100,
+                    padding: '8px 12px',
+                    background: '#fff',
+                    border: `1px solid ${C.outline}`,
+                    borderRadius: 8,
+                    ...T.bodySm,
+                    fontFamily: 'inherit',
+                    resize: 'vertical',
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Address Info */}
+            <div style={{ marginBottom: 24 }}>
+              <h3 style={{ ...T.labelMd, fontWeight: 700, color: C.onSurface, margin: '0 0 16px 0' }}>Address & Details</h3>
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ ...T.labelSm, color: C.onSurfaceVariant, display: 'block', marginBottom: 6, fontWeight: 600 }}>
+                  Address *
+                </label>
+                <input
+                  {...form.register('address')}
+                  placeholder="Street address"
+                  style={{
+                    width: '100%',
+                    height: 44,
+                    padding: '8px 12px',
+                    background: '#fff',
+                    border: `1px solid ${C.outline}`,
+                    borderRadius: 8,
+                    ...T.bodySm,
+                    fontFamily: 'inherit',
+                  }}
+                />
+                {form.formState.errors.address && (
+                  <small style={{ color: C.error, display: 'block', marginTop: 4 }}>
+                    {form.formState.errors.address.message}
+                  </small>
+                )}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 16 }}>
+                <div>
+                  <label style={{ ...T.labelSm, color: C.onSurfaceVariant, display: 'block', marginBottom: 6, fontWeight: 600 }}>
+                    City *
+                  </label>
+                  <input
+                    {...form.register('city')}
+                    placeholder="City"
+                    style={{
+                      width: '100%',
+                      height: 44,
+                      padding: '8px 12px',
+                      background: '#fff',
+                      border: `1px solid ${C.outline}`,
+                      borderRadius: 8,
+                      ...T.bodySm,
+                      fontFamily: 'inherit',
+                    }}
+                  />
+                  {form.formState.errors.city && (
+                    <small style={{ color: C.error, display: 'block', marginTop: 4 }}>
+                      {form.formState.errors.city.message}
+                    </small>
+                  )}
+                </div>
+
+                <div>
+                  <label style={{ ...T.labelSm, color: C.onSurfaceVariant, display: 'block', marginBottom: 6, fontWeight: 600 }}>
+                    Pincode *
+                  </label>
+                  <input
+                    {...form.register('pincode')}
+                    placeholder="Pincode (6 digits)"
+                    maxLength="6"
+                    style={{
+                      width: '100%',
+                      height: 44,
+                      padding: '8px 12px',
+                      background: '#fff',
+                      border: `1px solid ${C.outline}`,
+                      borderRadius: 8,
+                      ...T.bodySm,
+                      fontFamily: 'inherit',
+                    }}
+                  />
+                  {form.formState.errors.pincode && (
+                    <small style={{ color: C.error, display: 'block', marginTop: 4 }}>
+                      {form.formState.errors.pincode.message}
+                    </small>
+                  )}
+                </div>
+
+                <div>
+                  <label style={{ ...T.labelSm, color: C.onSurfaceVariant, display: 'block', marginBottom: 6, fontWeight: 600 }}>
+                    Phone *
+                  </label>
+                  <input
+                    {...form.register('phone')}
+                    placeholder="10-digit number"
+                    maxLength="15"
+                    onInput={(e) => { e.target.value = e.target.value.replace(/[^\d+]/g, ''); }}
+                    style={{
+                      width: '100%',
+                      height: 44,
+                      padding: '8px 12px',
+                      background: '#fff',
+                      border: `1px solid ${C.outline}`,
+                      borderRadius: 8,
+                      ...T.bodySm,
+                      fontFamily: 'inherit',
+                    }}
+                  />
+                  {form.formState.errors.phone && (
+                    <small style={{ color: C.error, display: 'block', marginTop: 4 }}>
+                      {form.formState.errors.phone.message}
+                    </small>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Operations */}
+            <div style={{ marginBottom: 32 }}>
+              <h3 style={{ ...T.labelMd, fontWeight: 700, color: C.onSurface, margin: '0 0 16px 0' }}>Operations</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div>
+                  <label style={{ ...T.labelSm, color: C.onSurfaceVariant, display: 'block', marginBottom: 6, fontWeight: 600 }}>
+                    Avg Preparing Time (mins) *
+                  </label>
+                  <input
+                    {...form.register('avg_preparing_time')}
+                    type="number"
+                    min="5"
+                    style={{
+                      width: '100%',
+                      height: 44,
+                      padding: '8px 12px',
+                      background: '#fff',
+                      border: `1px solid ${C.outline}`,
+                      borderRadius: 8,
+                      ...T.bodySm,
+                      fontFamily: 'inherit',
+                    }}
+                  />
+                  {form.formState.errors.avg_preparing_time && (
+                    <small style={{ color: C.error, display: 'block', marginTop: 4 }}>
+                      {form.formState.errors.avg_preparing_time.message}
+                    </small>
+                  )}
+                </div>
+
+                <div>
+                  <label style={{ ...T.labelSm, color: C.onSurfaceVariant, display: 'block', marginBottom: 6, fontWeight: 600 }}>
+                    Min Order Amount (₹) *
+                  </label>
+                  <input
+                    {...form.register('min_order_amount')}
+                    type="number"
+                    min="0"
+                    step="10"
+                    style={{
+                      width: '100%',
+                      height: 44,
+                      padding: '8px 12px',
+                      background: '#fff',
+                      border: `1px solid ${C.outline}`,
+                      borderRadius: 8,
+                      ...T.bodySm,
+                      fontFamily: 'inherit',
+                    }}
+                  />
+                  {form.formState.errors.min_order_amount && (
+                    <small style={{ color: C.error, display: 'block', marginTop: 4 }}>
+                      {form.formState.errors.min_order_amount.message}
+                    </small>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Submit */}
+            <button
+              type="submit"
+              disabled={isLoading}
+              style={{
+                width: '100%',
+                padding: '12px 24px',
+                background: C.saffron || '#F26E21',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 8,
+                ...T.labelLg,
+                fontWeight: 600,
+                cursor: isLoading ? 'not-allowed' : 'pointer',
+                opacity: isLoading ? 0.6 : 1,
+              }}
+            >
+              {isLoading ? 'Registering...' : 'Register Restaurant'}
+            </button>
+          </form>
+        </div>
       </div>
     );
   }
@@ -394,7 +677,8 @@ export default function RestaurantManagementPage() {
                   <input
                     {...form.register('phone')}
                     placeholder="9876543210"
-                    maxLength="10"
+                    maxLength="15"
+                    onInput={(e) => { e.target.value = e.target.value.replace(/[^\d+]/g, ''); }}
                     style={{
                       width: '100%',
                       height: 44,

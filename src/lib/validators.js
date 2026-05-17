@@ -8,21 +8,21 @@ export const loginSchema = z.object({
 export const customerRegisterSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters').max(100),
   email: z.string().email('Please enter a valid email'),
-  phone: z.string().regex(/^\+?1?\d{9,15}$/, 'Enter a valid phone number'),
+  phone: z.string().regex(/^\+?\d{10,15}$/, 'Enter a valid phone number (10-15 digits)'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
 });
 
 export const restaurantOwnerRegisterSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters').max(100),
   email: z.string().email('Please enter a valid email'),
-  phone: z.string().regex(/^\+?1?\d{9,15}$/, 'Enter a valid phone number'),
+  phone: z.string().regex(/^\+?\d{10,15}$/, 'Enter a valid phone number (10-15 digits)'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
 });
 
 export const agentRegisterSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters').max(100),
   email: z.string().email('Please enter a valid email'),
-  phone: z.string().regex(/^\+?1?\d{9,15}$/, 'Enter a valid phone number'),
+  phone: z.string().regex(/^\+?\d{10,15}$/, 'Enter a valid phone number (10-15 digits)'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
   vehicle_type: z.enum(['BIKE', 'SCOOTER', 'BICYCLE']),
   vehicle_number: z.string().min(1, 'Vehicle number is required').max(15),
@@ -35,7 +35,7 @@ export const addressSchema = z.object({
   address_line: z.string().min(3, 'Address is required').max(250),
   pincode: z.string().regex(/^\d{6}$/, 'Enter a valid 6-digit pincode'),
   flat_number: z.string().min(1, 'Flat/House number is required').max(100),
-  receiver_phone: z.string().regex(/^\+?1?\d{9,15}$/, 'Enter a valid phone number'),
+  receiver_phone: z.string().regex(/^\+?\d{10,15}$/, 'Enter a valid phone number (10-15 digits)'),
   lat: z.string().optional().nullable(),
   long: z.string().optional().nullable(),
 });

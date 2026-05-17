@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ordersAPI } from '@/api/orders';
 import { formatCurrency, getStatusInfo } from '@/lib/utils';
+import { useRestaurantOwnerStore } from '@/store/restaurantOwnerStore';
 import { toast } from 'sonner';
 import { Clock, CheckCircle, ChefHat, Package } from 'lucide-react';
 import { T, C, card } from '@/lib/stitch';
@@ -16,7 +17,8 @@ const STATUS_COLS = [
 
 export default function RestaurantOrdersPage() {
   const queryClient = useQueryClient();
-  const { data } = useQuery({ queryKey: ['restaurantOrders'], queryFn: () => ordersAPI.restaurantOrders({ page_size: 50 }), refetchInterval: 10000 });
+  const { restaurant } = useRestaurantOwnerStore();
+  const { data } = useQuery({ queryKey: ['restaurantOrders', restaurant?.id], queryFn: () => ordersAPI.restaurantOrders(restaurant.id, { page_size: 50 }), enabled: !!restaurant?.id, refetchInterval: 10000 });
   const orders = data?.data?.results || data?.data || [];
   const updateStatus = useMutation({ mutationFn: ({ id, status }) => ordersAPI.updateStatus(id, { status }), onSuccess: () => { toast.success('Status updated!'); queryClient.invalidateQueries(['restaurantOrders']); }, onError: (e) => toast.error(e.response?.data?.detail || 'Failed') });
   const nextStatus = (s) => ({ PLACED: 'ACCEPTED', ACCEPTED: 'PREPARING', PREPARING: 'READY' }[s]);

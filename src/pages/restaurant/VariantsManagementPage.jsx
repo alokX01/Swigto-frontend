@@ -61,6 +61,30 @@ export default function VariantsManagementPage() {
     setIsAddingVariant(true);
   };
 
+  if (!restaurant) {
+    return (
+      <div style={{ maxWidth: 1000, margin: '0 auto', padding: `${S.gutter}px`, textAlign: 'center' }}>
+        <h1 style={{ ...T.headlineMd, color: C.onSurface, marginBottom: 8 }}>Register Your Restaurant First</h1>
+        <p style={{ ...T.bodyMd, color: C.onSurfaceVariant, marginBottom: 24 }}>You must register your restaurant details before managing item variants.</p>
+        <button 
+          onClick={() => navigate('/restaurant/management')}
+          style={{
+            padding: '12px 24px',
+            background: C.saffron || '#F26E21',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 12,
+            ...T.labelLg,
+            fontWeight: 600,
+            cursor: 'pointer'
+          }}
+        >
+          Register Restaurant
+        </button>
+      </div>
+    );
+  }
+
   if (isLoading && !selectedMenuItem) {
     return (
       <div style={{ maxWidth: 800, margin: '0 auto', padding: `${S.gutter}px` }}>

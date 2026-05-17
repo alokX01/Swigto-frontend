@@ -30,7 +30,7 @@ export default function HomePage() {
 
   const { data: restaurantsData, isLoading } = useQuery({
     queryKey: ['restaurants', selectedCity, selectedCuisine, page],
-    queryFn: () => restaurantsAPI.list({ city: selectedCity, cuisine_type: selectedCuisine || undefined, page, page_size: 12 }),
+    queryFn: () => restaurantsAPI.list({ cuisine_type: selectedCuisine || undefined, page, page_size: 12 }),
     keepPreviousData: true,
   });
 
