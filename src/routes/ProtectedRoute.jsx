@@ -33,3 +33,15 @@ export function PublicRoute({ children }) {
 
   return children;
 }
+
+export function RoleRedirect() {
+  const { isAuthenticated, isLoading, user } = useAuthStore();
+
+  if (isLoading) return <PageLoader />;
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <Navigate to={getRoleRedirectPath(user?.role || user?.user_type)} replace />;
+}

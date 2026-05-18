@@ -49,6 +49,19 @@ export function formatCurrency(amount) {
   return inrFormatter.format(Number.isFinite(num) ? num : 0);
 }
 
+export function resolveMediaUrl(url) {
+  if (!url || typeof url !== 'string') return '';
+  if (/^(https?:|data:|blob:)/i.test(url)) return url;
+
+  const base = import.meta.env.VITE_API_BASE_URL || '';
+  try {
+    const origin = new URL(base).origin;
+    return `${origin}${url.startsWith('/') ? '' : '/'}${url}`;
+  } catch {
+    return url;
+  }
+}
+
 export function formatDate(dateStr) {
   return new Date(dateStr).toLocaleDateString('en-IN', {
     day: 'numeric',

@@ -1,19 +1,12 @@
 import { Link, useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Bike, CheckCircle, Clock, CookingPot, Home, MapPin, PackageCheck, Store } from 'lucide-react';
+import { toast } from 'sonner';
 import { ordersAPI } from '@/api/orders';
-import { formatDateTime, getStatusInfo, getStatusStep } from '@/lib/utils';
+import { formatDateTime } from '@/lib/utils';
 import { C, S, badge } from '@/lib/stitch';
-
-const STATUS_COLORS = {
-  PLACED: ['#DBEAFE', '#1D4ED8'],
-  ACCEPTED: ['#CFFAFE', '#0E7490'],
-  PREPARING: ['#FEF3C7', '#B45309'],
-  READY: ['#E9DDFF', '#4F378A'],
-  PICKED_UP: ['#E0E7FF', '#4338CA'],
-  DELIVERED: ['#D1FAE5', '#065F46'],
-  CANCELLED: ['#FFDAD6', '#93000A'],
-};
+import { getApiError } from '@/lib/helpers';
+import { canCustomerCancel, getOrderMeta, getOrderStep } from '@/lib/orderFlow';
 
 const STEP_META = [
   { status: 'PLACED', label: 'Placed', icon: CheckCircle },
@@ -24,29 +17,29 @@ const STEP_META = [
   { status: 'DELIVERED', label: 'Delivered', icon: Home },
 ];
 
-const STATUS_MESSAGES = {
-  PLACED: ['Order Placed', 'Waiting for the restaurant to accept your order.'],
-  ACCEPTED: ['Order Accepted', 'The restaurant has confirmed your food.'],
-  PREPARING: ['Being Prepared', 'Your meal is cooking now.'],
-  READY: ['Ready for Pickup', 'A delivery partner will pick it up soon.'],
-  PICKED_UP: ['On the Way', 'Your delivery partner is heading to you.'],
-  DELIVERED: ['Delivered', 'Enjoy your meal.'],
-  CANCELLED: ['Cancelled', 'This order was cancelled.'],
-};
-
 export default function TrackOrderPage() {
   const { id } = useParams();
+  const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ['order', id],
     queryFn: () => ordersAPI.get(id),
-    refetchInterval: 10000,
+    refetchInterval: 5000,
   });
 
   const order = data?.data;
   const status = order?.status || 'PLACED';
-  const colors = STATUS_COLORS[status] || STATUS_COLORS.PLACED;
-  const [title, subtitle] = STATUS_MESSAGES[status] || STATUS_MESSAGES.PLACED;
-  const currentStep = getStatusStep(status);
+  const meta = getOrderMeta(status);
+  const currentStep = getOrderStep(status);
+
+  const cancelMutation = useMutation({
+    mutationFn: () => ordersAPI.cancel(id, { status: 'CANCELLED', note: 'Cancelled by customer' }),
+    onSuccess: () => {
+      toast.success('Order cancelled');
+      queryClient.invalidateQueries({ queryKey: ['order', id] });
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+    },
+    onError: (err) => toast.error(getApiError(err, 'Order cannot be cancelled now')),
+  });
 
   if (isLoading) {
     return (
@@ -67,11 +60,11 @@ export default function TrackOrderPage() {
 
       <section className="track-hero">
         <div>
-          <span className="track-kicker"><Clock size={15} /> Updates every 10 seconds</span>
-          <h1>{title}</h1>
-          <p>{subtitle}</p>
+          <span className="track-kicker"><Clock size={15} /> Updates every 5 seconds</span>
+          <h1>{meta.customerTitle}</h1>
+          <p>{meta.customerMessage}</p>
         </div>
-        {order && <span style={badge(colors[0], colors[1])}>{getStatusInfo(status).label}</span>}
+        {order && <span style={badge(meta.bg, meta.color)}>{meta.label}</span>}
       </section>
 
       <div className="track-grid">
@@ -89,11 +82,12 @@ export default function TrackOrderPage() {
             <div className="track-timeline">
               {STEP_META.map((step, index) => {
                 const Icon = step.icon;
-                const done = index <= currentStep;
+                const done = status !== 'CANCELLED' && index <= currentStep;
+                const stepMeta = getOrderMeta(step.status);
                 return (
                   <div key={step.status} className={done ? 'timeline-row done' : 'timeline-row'}>
                     <div><Icon size={18} /></div>
-                    <span>{step.label}</span>
+                    <span>{stepMeta.shortLabel}</span>
                     {done && <strong>{index === currentStep ? 'Current' : 'Done'}</strong>}
                   </div>
                 );
@@ -126,7 +120,12 @@ export default function TrackOrderPage() {
 
           <section className="track-card support-card">
             <h2>Need Help?</h2>
-            <p>Use the order details page if you need to cancel or inspect billing.</p>
+            <p>{canCustomerCancel(status) ? 'You can cancel before the restaurant accepts this order.' : 'Use order details to inspect billing and delivery information.'}</p>
+            {canCustomerCancel(status) && (
+              <button type="button" onClick={() => cancelMutation.mutate()} disabled={cancelMutation.isPending}>
+                {cancelMutation.isPending ? 'Cancelling...' : 'Cancel Order'}
+              </button>
+            )}
             <Link to={`/orders/${id}`}>View Details</Link>
           </section>
         </aside>
@@ -372,18 +371,32 @@ function TrackStyles() {
         font-size: 14px;
       }
 
-      .support-card a {
+      .support-card a,
+      .support-card button {
         min-height: 44px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         width: 100%;
+        margin-top: 10px;
+        border: 0;
         border-radius: 12px;
         background: ${C.saffron};
         color: #fff;
         text-decoration: none;
         font-family: Inter, sans-serif;
         font-weight: 800;
+        cursor: pointer;
+      }
+
+      .support-card button {
+        background: ${C.errorContainer};
+        color: ${C.onErrorContainer};
+      }
+
+      .support-card button:disabled {
+        opacity: 0.65;
+        cursor: not-allowed;
       }
 
       .skeleton-block {

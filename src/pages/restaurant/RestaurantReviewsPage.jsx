@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useRestaurantOwnerStore } from '@/store/restaurantOwnerStore';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -9,38 +10,26 @@ import { reviewsAPI } from '@/api/reviews';
 
 export default function RestaurantReviewsPage() {
   const navigate = useNavigate();
-  const { restaurant } = useRestaurantOwnerStore();
-  const [reviews, setReviews] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const { restaurant, fetchMyRestaurant } = useRestaurantOwnerStore();
   const [page, setPage] = useState(1);
-  const [totalCount, setTotalCount] = useState(0);
 
   const pageSize = 10;
+  const restaurantId = restaurant?.id;
 
   useEffect(() => {
-    if (restaurant?.id) {
-      loadReviews();
-    }
-  }, [restaurant?.id, page]);
+    fetchMyRestaurant().catch((err) => toast.error(getApiError(err, 'Failed to load restaurant')));
+  }, [fetchMyRestaurant]);
 
-  const loadReviews = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const res = await reviewsAPI.getRestaurantReviews(restaurant.id, {
-        page,
-        page_size: pageSize,
-      });
-      setReviews(res.data.results || res.data);
-      setTotalCount(res.data.count || res.data.length);
-    } catch (err) {
-      setError(getApiError(err, 'Failed to load reviews'));
-      toast.error(getApiError(err, 'Failed to load reviews'));
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const reviewsQuery = useQuery({
+    queryKey: ['restaurantReviews', restaurantId, page],
+    queryFn: () => reviewsAPI.getRestaurantReviews(restaurantId, { page, page_size: pageSize }),
+    enabled: !!restaurantId,
+  });
+
+  const reviews = reviewsQuery.data?.data?.results || reviewsQuery.data?.data || [];
+  const totalCount = reviewsQuery.data?.data?.count || reviews.length;
+  const error = reviewsQuery.error ? getApiError(reviewsQuery.error, 'Failed to load reviews') : null;
+  const isLoading = reviewsQuery.isLoading;
 
   const totalPages = Math.ceil(totalCount / pageSize);
   const avgRating = reviews.length > 0 

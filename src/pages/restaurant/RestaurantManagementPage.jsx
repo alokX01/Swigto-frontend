@@ -1,6 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRestaurantOwnerStore } from '@/store/restaurantOwnerStore';
-import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Edit, Power, AlertCircle, MapPin, Clock, DollarSign, UtensilsCrossed, Phone } from 'lucide-react';
 import { useForm } from 'react-hook-form';
@@ -8,6 +7,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { T, C, S } from '@/lib/stitch';
 import { getApiError } from '@/lib/helpers';
+import { resolveMediaUrl } from '@/lib/utils';
+import { toFormData } from '@/lib/formData';
 
 const CUISINE_TYPES = [
   { value: 'NORTH_INDIAN', label: 'North Indian' },
@@ -38,10 +39,11 @@ const restaurantSchema = z.object({
 });
 
 export default function RestaurantManagementPage() {
-  const navigate = useNavigate();
   const { restaurant, isLoading, error, fetchMyRestaurant, updateRestaurant, createRestaurant, toggleRestaurantStatus } = useRestaurantOwnerStore();
   const [isEditing, setIsEditing] = useState(false);
   const [isTogglingStatus, setIsTogglingStatus] = useState(false);
+  const [imageFile, setImageFile] = useState(null);
+  const imagePreview = useMemo(() => (imageFile ? URL.createObjectURL(imageFile) : ''), [imageFile]);
 
   const form = useForm({
     resolver: zodResolver(restaurantSchema),
@@ -78,14 +80,38 @@ export default function RestaurantManagementPage() {
     }
   }, [restaurant, form]);
 
+  useEffect(() => {
+    if (!imagePreview) return undefined;
+    return () => URL.revokeObjectURL(imagePreview);
+  }, [imagePreview]);
+
+  const handleImageChange = (event) => {
+    const file = event.target.files?.[0] || null;
+    if (file && !file.type.startsWith('image/')) {
+      toast.error('Please select a valid image file');
+      event.target.value = '';
+      return;
+    }
+    setImageFile(file);
+  };
+
   const onSubmit = async (data) => {
+    const payload = toFormData({
+      ...data,
+      image: imageFile,
+      avg_preparing_time: Number(data.avg_preparing_time),
+      min_order_amount: String(data.min_order_amount),
+      is_open: restaurant?.is_open ?? true,
+    });
+
     try {
       if (restaurant) {
-        await updateRestaurant(restaurant.id, data);
+        await updateRestaurant(restaurant.id, payload);
         toast.success('Restaurant updated successfully');
         setIsEditing(false);
+        setImageFile(null);
       } else {
-        await createRestaurant(data);
+        await createRestaurant(payload);
         toast.success('Restaurant registered successfully!');
       }
     } catch (err) {
@@ -214,6 +240,34 @@ export default function RestaurantManagementPage() {
                     ...T.bodySm,
                     fontFamily: 'inherit',
                     resize: 'vertical',
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                {(imagePreview || restaurant?.image) && (
+                  <img
+                    src={imagePreview || resolveMediaUrl(restaurant?.image)}
+                    alt="Restaurant preview"
+                    style={{ width: '100%', height: 180, objectFit: 'cover', borderRadius: 8, marginBottom: 10, background: C.surfaceContainerLow }}
+                  />
+                )}
+                <label style={{ ...T.labelSm, color: C.onSurfaceVariant, display: 'block', marginBottom: 6, fontWeight: 600 }}>
+                  Restaurant Image
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageChange}
+                  style={{
+                    width: '100%',
+                    height: 44,
+                    padding: '9px 12px',
+                    background: '#fff',
+                    border: `1px solid ${C.outline}`,
+                    borderRadius: 8,
+                    ...T.bodySm,
+                    fontFamily: 'inherit',
                   }}
                 />
               </div>
@@ -467,6 +521,14 @@ export default function RestaurantManagementPage() {
           </div>
         </div>
 
+        {restaurant.image && (
+          <img
+            src={resolveMediaUrl(restaurant.image)}
+            alt={restaurant.name}
+            style={{ width: '100%', height: 220, objectFit: 'cover', borderRadius: 12, marginBottom: 24, background: C.surfaceContainerLow }}
+          />
+        )}
+
         {/* Quick Stats */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12 }}>
           <div style={{ padding: 12, background: C.surfaceContainerLow, borderRadius: 8 }}>
@@ -585,6 +647,34 @@ export default function RestaurantManagementPage() {
                     ...T.bodySm,
                     fontFamily: 'inherit',
                     resize: 'vertical',
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                {(imagePreview || restaurant?.image) && (
+                  <img
+                    src={imagePreview || resolveMediaUrl(restaurant?.image)}
+                    alt="Restaurant preview"
+                    style={{ width: '100%', height: 180, objectFit: 'cover', borderRadius: 8, marginBottom: 10, background: C.surfaceContainerLow }}
+                  />
+                )}
+                <label style={{ ...T.labelSm, color: C.onSurfaceVariant, display: 'block', marginBottom: 6, fontWeight: 600 }}>
+                  Restaurant Image
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageChange}
+                  style={{
+                    width: '100%',
+                    height: 44,
+                    padding: '9px 12px',
+                    background: '#fff',
+                    border: `1px solid ${C.outline}`,
+                    borderRadius: 8,
+                    ...T.bodySm,
+                    fontFamily: 'inherit',
                   }}
                 />
               </div>

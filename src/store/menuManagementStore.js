@@ -134,7 +134,7 @@ export const useMenuManagementStore = create((set) => ({
   updateMenuItem: async (restaurantId, itemId, data) => {
     set({ isLoading: true, error: null });
     try {
-      const res = await restaurantsAPI.updateMenuItem(restaurantId, itemId, data);
+      const res = await restaurantsAPI.patchMenuItem(restaurantId, itemId, data);
       set((state) => ({
         menuItems: state.menuItems.map((item) => (item.id === itemId ? res.data : item)),
         selectedMenuItem: state.selectedMenuItem?.id === itemId ? res.data : state.selectedMenuItem,

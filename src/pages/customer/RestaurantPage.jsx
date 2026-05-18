@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Star, Clock, ArrowLeft, ShoppingCart, Search } from 'lucide-react';
+import { Star, Clock, ArrowLeft, ShoppingCart, Search, X } from 'lucide-react';
 import { restaurantsAPI } from '@/api/restaurants';
 import { useCartStore } from '@/store/cartStore';
 import { useAuthStore } from '@/store/authStore';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, resolveMediaUrl } from '@/lib/utils';
+import { toNumber } from '@/lib/helpers';
 import { useDebounce } from '@/lib/hooks';
 import { T, C, S, card } from '@/lib/stitch';
 import { toast } from 'sonner';
@@ -16,6 +17,8 @@ export default function RestaurantPage() {
   const location = useLocation();
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [searchMenu, setSearchMenu] = useState('');
+  const [variantItem, setVariantItem] = useState(null);
+  const [selectedVariantId, setSelectedVariantId] = useState('');
   const debouncedSearchMenu = useDebounce(searchMenu, 300);
   const addItem = useCartStore((s) => s.addItem);
   const cartItems = useCartStore((s) => s.items);
@@ -30,16 +33,52 @@ export default function RestaurantPage() {
   const categories = categoriesData?.data?.results || categoriesData?.data || [];
   const menuItems = menuData?.data?.results || menuData?.data || [];
   const itemCount = cartItems.reduce((sum, i) => sum + (i.quantity || 0), 0);
+  const cartTotal = toNumber(cart?.total_amount) || cartItems.reduce((sum, item) => {
+    const unit = toNumber(item.unit_price);
+    return sum + (toNumber(item.subtotal) || unit * Number(item.quantity || 1));
+  }, 0);
 
-  const handleAdd = async (item) => {
+  const getAvailableVariants = (item) => (item?.variants || []).filter((variant) => variant.is_available !== false);
+  const getItemPrice = (item) => toNumber(item?.effective_price) || toNumber(item?.base_price);
+
+  const addToCart = async (item, variant = null) => {
     if (!isAuthenticated) {
       toast.error('Please login to add items to your cart');
       navigate('/login', { state: { from: location } });
       return;
     }
-    try { await addItem({ menu_item: item.id, variant: null, quantity: 1 }); toast.success(`${item.name} added!`); }
+
+    const price = variant ? toNumber(variant.price) : getItemPrice(item);
+    try {
+      await addItem({
+        menu_item: item.id,
+        variant: variant?.id || null,
+        quantity: 1,
+        _meta: {
+          name: item.name,
+          image: item.image,
+          price,
+        },
+      });
+      setVariantItem(null);
+      setSelectedVariantId('');
+      toast.success(`${item.name} added!`);
+    }
     catch (e) { toast.error(e.response?.data?.detail || 'Failed to add'); }
   };
+
+  const handleAdd = async (item) => {
+    const variants = getAvailableVariants(item);
+    if (variants.length > 0) {
+      setVariantItem(item);
+      setSelectedVariantId(variants[0]?.id || '');
+      return;
+    }
+    await addToCart(item);
+  };
+
+  const variantOptions = getAvailableVariants(variantItem);
+  const selectedVariant = variantOptions.find((variant) => variant.id === selectedVariantId) || variantOptions[0];
 
   if (loadingR) return (
     <div style={{ maxWidth: 1280, margin: '0 auto', padding: '24px' }}>
@@ -55,7 +94,7 @@ export default function RestaurantPage() {
 
       {/* Hero */}
       <div style={{ position: 'relative', borderRadius: 20, overflow: 'hidden', height: 200, marginBottom: 24, background: `linear-gradient(135deg, #FFF3ED, #FFE4D6)` }}>
-        {(r?.cover_image || r?.image) ? <img src={r.cover_image || r.image} alt={r.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> :
+        {(r?.cover_image || r?.image) ? <img src={resolveMediaUrl(r.cover_image || r.image)} alt={r.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> :
           <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 56 }}>🍴</div>}
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.6) 0%, transparent 60%)' }} />
         <div style={{ position: 'absolute', bottom: 16, left: 20, color: '#fff' }}>
@@ -106,19 +145,21 @@ export default function RestaurantPage() {
                   {item.is_bestseller && <span style={{ ...T.labelSm, fontSize: 10, fontWeight: 700, color: '#B45309', background: '#FEF3C7', padding: '2px 6px', borderRadius: 4 }}>★ Bestseller</span>}
                 </div>
                 <h3 style={{ ...T.labelLg, fontWeight: 600, color: C.onSurface, margin: 0 }}>{item.name}</h3>
-                <p style={{ ...T.labelLg, fontWeight: 600, color: C.onSurface, marginTop: 2 }}>{formatCurrency(item.effective_price || item.base_price)}</p>
+                <p style={{ ...T.labelLg, fontWeight: 600, color: C.onSurface, marginTop: 2 }}>
+                  {getAvailableVariants(item).length > 0 ? `From ${formatCurrency(getItemPrice(item))}` : formatCurrency(getItemPrice(item))}
+                </p>
                 {item.description && <p style={{ ...T.labelSm, color: C.outline, marginTop: 4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.description}</p>}
               </div>
               <div style={{ position: 'relative', flexShrink: 0 }}>
                 <div style={{ width: 96, height: 96, borderRadius: 12, overflow: 'hidden', background: C.surfaceContainer }}>
-                  {item.image ? <img src={item.image} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> :
+                  {item.image ? <img src={resolveMediaUrl(item.image)} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> :
                     <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, background: '#FFF3ED' }}>🍽️</div>}
                 </div>
                 <button onClick={() => handleAdd(item)} disabled={item.is_available === false}
                   style={{ position: 'absolute', bottom: -8, left: '50%', transform: 'translateX(-50%)', background: '#fff', border: `2px solid ${C.saffron}`, color: C.saffron, padding: '4px 20px', borderRadius: 8, ...T.labelMd, fontWeight: 700, cursor: 'pointer', transition: 'all 0.15s', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', opacity: item.is_available === false ? 0.4 : 1 }}
                   onMouseEnter={e => { e.currentTarget.style.background = C.saffron; e.currentTarget.style.color = '#fff'; }}
                   onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.color = C.saffron; }}>
-                  {item.is_available !== false ? 'ADD' : 'N/A'}
+                  {item.is_available !== false ? (getAvailableVariants(item).length > 0 ? 'CHOOSE' : 'ADD') : 'N/A'}
                 </button>
               </div>
             </div>
@@ -126,12 +167,55 @@ export default function RestaurantPage() {
         }
       </div>
 
+      {variantItem && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(29,27,32,0.42)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', padding: 16 }}>
+          <div style={{ width: '100%', maxWidth: 480, background: '#fff', borderRadius: 20, border: `1px solid ${C.outlineVariant}`, boxShadow: '0 24px 80px rgba(0,0,0,0.22)', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', gap: 14, padding: 16, borderBottom: `1px solid ${C.outlineVariant}` }}>
+              <img src={resolveMediaUrl(variantItem.image) || 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?q=80&w=300&auto=format&fit=crop'} alt={variantItem.name} style={{ width: 72, height: 72, borderRadius: 12, objectFit: 'cover', background: C.surfaceContainer }} />
+              <div style={{ flex: 1 }}>
+                <h3 style={{ ...T.titleMd, color: C.onSurface, fontWeight: 800, margin: 0 }}>{variantItem.name}</h3>
+                <p style={{ ...T.bodySm, color: C.onSurfaceVariant, margin: '4px 0 0' }}>Choose size or portion</p>
+              </div>
+              <button onClick={() => { setVariantItem(null); setSelectedVariantId(''); }} style={{ width: 36, height: 36, border: 'none', borderRadius: 999, background: C.surfaceContainerLow, color: C.onSurfaceVariant, cursor: 'pointer' }}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ padding: 16, display: 'grid', gap: 10 }}>
+              {variantOptions.map((variant) => {
+                const selected = selectedVariant?.id === variant.id;
+                return (
+                  <button
+                    key={variant.id}
+                    onClick={() => setSelectedVariantId(variant.id)}
+                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: 54, padding: '10px 12px', borderRadius: 12, border: `2px solid ${selected ? C.primary : C.outlineVariant}`, background: selected ? C.primaryFixed : '#fff', cursor: 'pointer', textAlign: 'left' }}
+                  >
+                    <span style={{ ...T.labelLg, fontWeight: 800, color: C.onSurface }}>{variant.name}</span>
+                    <span style={{ ...T.labelLg, fontWeight: 800, color: selected ? C.primary : C.onSurface }}>{formatCurrency(variant.price)}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div style={{ padding: 16, borderTop: `1px solid ${C.outlineVariant}` }}>
+              <button
+                onClick={() => addToCart(variantItem, selectedVariant)}
+                disabled={!selectedVariant}
+                style={{ width: '100%', height: 52, border: 'none', borderRadius: 14, background: selectedVariant ? C.saffron : C.surfaceContainer, color: selectedVariant ? '#fff' : C.onSurfaceVariant, ...T.titleMd, fontWeight: 800, cursor: selectedVariant ? 'pointer' : 'not-allowed' }}
+              >
+                Add {selectedVariant ? `| ${formatCurrency(selectedVariant.price)}` : ''}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Floating cart bar */}
       {itemCount > 0 && (
         <Link to="/cart" style={{ position: 'fixed', bottom: 80, left: 16, right: 16, maxWidth: 384, margin: '0 auto', background: C.saffron, color: '#fff', borderRadius: 16, padding: '14px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 30, boxShadow: '0 8px 30px rgba(242,110,33,0.4)', textDecoration: 'none', animation: 'slide-up 0.3s ease-out' }}>
           <div>
             <span style={{ ...T.labelLg, fontWeight: 700 }}>{itemCount} item{itemCount > 1 ? 's' : ''}</span>
-            {cart && <span style={{ ...T.bodySm, opacity: 0.9, marginLeft: 8 }}>{formatCurrency(cart.total_amount)}</span>}
+            {cart && <span style={{ ...T.bodySm, opacity: 0.9, marginLeft: 8 }}>{formatCurrency(cartTotal)}</span>}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, ...T.labelLg, fontWeight: 600 }}>View Cart <ShoppingCart size={16} /></div>
         </Link>

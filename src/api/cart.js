@@ -1,10 +1,14 @@
 import api from './axios';
 
-const normalizeCartItemPayload = (data = {}) => ({
-  ...data,
-  variant: data.variant ?? null,
-  quantity: Number(data.quantity || 1),
-});
+const normalizeCartItemPayload = (data = {}) => {
+  const payload = { ...data };
+  delete payload._meta;
+  return {
+    ...payload,
+    variant: payload.variant ?? null,
+    quantity: Number(payload.quantity || 1),
+  };
+};
 
 export const cartAPI = {
   get: () => api.get('/cart/'),

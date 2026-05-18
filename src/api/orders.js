@@ -8,8 +8,8 @@ export const ordersAPI = {
   cancel: (id, data) => api.post(`/orders/${id}/cancel/`, data),
 
   // Restaurant
-  restaurantOrders: (restaurantId, params) => api.get(`/orders/restaurants/${restaurantId}/`, { params }),
-  restaurantOrderDetail: (restaurantId, id) => api.get(`/orders/restaurants/${restaurantId}/${id}/`),
+  restaurantOrders: (params) => api.get('/orders/restaurants/', { params }),
+  restaurantOrderDetail: (id) => api.get(`/orders/restaurants/${id}/`),
 
   // Agent
   agentOrders: (params) => api.get('/orders/agents/', { params }),

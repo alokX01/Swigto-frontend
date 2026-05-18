@@ -54,9 +54,22 @@ export const useRestaurantOwnerStore = create((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const res = await restaurantsAPI.getMyRestaurant();
-      // The backend /mine/ endpoint returns a list of restaurants
-      let myRest = Array.isArray(res.data) ? res.data[0] : res.data;
-      
+      const mine = Array.isArray(res.data?.results)
+        ? res.data.results
+        : Array.isArray(res.data)
+          ? res.data
+          : res.data
+            ? [res.data]
+            : [];
+
+      const firstRest = mine[0] || null;
+      let myRest = firstRest;
+
+      if (firstRest?.id) {
+        const detailRes = await restaurantsAPI.get(firstRest.id);
+        myRest = detailRes.data;
+      }
+
       set({ restaurant: myRest || null, isLoading: false });
       return myRest || null;
     } catch (err) {
@@ -72,19 +85,8 @@ export const useRestaurantOwnerStore = create((set, get) => ({
   createRestaurant: async (data) => {
     set({ isLoading: true, error: null });
     try {
-      // Create the restaurant
-      const createRes = await restaurantsAPI.create(data);
-      let myRest = createRes.data;
-      
-      // The POST response doesn't return the ID, so fetch via mine/
-      try {
-        const res = await restaurantsAPI.getMyRestaurant();
-        const mineData = Array.isArray(res.data) ? res.data[res.data.length - 1] : res.data;
-        if (mineData && mineData.id) {
-          myRest = { ...myRest, ...mineData };
-        }
-      } catch(e) {}
-
+      await restaurantsAPI.create(data);
+      const myRest = await get().fetchMyRestaurant();
       set({ restaurant: myRest, isLoading: false });
       return myRest;
     } catch (err) {
@@ -108,7 +110,8 @@ export const useRestaurantOwnerStore = create((set, get) => ({
   updateRestaurant: async (id, data) => {
     set({ isLoading: true, error: null });
     try {
-      const res = await restaurantsAPI.updateRestaurant(id, data);
+      await restaurantsAPI.patchRestaurant(id, data);
+      const res = await restaurantsAPI.get(id);
       set({ restaurant: res.data, isLoading: false });
       return res.data;
     } catch (err) {
@@ -121,8 +124,9 @@ export const useRestaurantOwnerStore = create((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const res = await restaurantsAPI.toggleRestaurantStatus(id);
-      set({ restaurant: res.data, isLoading: false });
-      return res.data;
+      const restaurant = { ...(get().restaurant || {}), ...res.data };
+      set({ restaurant, isLoading: false });
+      return restaurant;
     } catch (err) {
       set({ error: err.response?.data || err.message, isLoading: false });
       throw err;

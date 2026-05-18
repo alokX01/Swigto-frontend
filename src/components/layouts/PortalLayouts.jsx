@@ -1,7 +1,15 @@
 import { Outlet } from 'react-router-dom';
+import { useEffect } from 'react';
 import { Sidebar } from '@/components/Sidebar';
+import { useRestaurantOwnerStore } from '@/store/restaurantOwnerStore';
 
 export function RestaurantLayout() {
+  const fetchMyRestaurant = useRestaurantOwnerStore((s) => s.fetchMyRestaurant);
+
+  useEffect(() => {
+    fetchMyRestaurant().catch(() => {});
+  }, [fetchMyRestaurant]);
+
   return (
     <div style={{ minHeight: '100vh', background: '#F8FAFC', fontFamily: 'Inter, sans-serif' }}>
       <Sidebar variant="restaurant" />

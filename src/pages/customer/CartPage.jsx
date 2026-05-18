@@ -1,15 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ArrowLeft, Minus, Plus, Trash2, ShoppingBag, ChevronRight, ShieldCheck } from 'lucide-react';
 import { useCartStore } from '@/store/cartStore';
 import { useAuthStore } from '@/store/authStore';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, resolveMediaUrl } from '@/lib/utils';
 import { T, C, S } from '@/lib/stitch';
 import { toNumber, toBoolean, getApiError } from '@/lib/helpers';
 
 export default function CartPage() {
-  const navigate = useNavigate();
   const isAuth = useAuthStore((s) => s.isAuthenticated);
   const { cart, items, isLoading, fetchCart, updateItem, removeItem, clearCart } = useCartStore();
   const [busyItem, setBusyItem] = useState(null);
@@ -31,11 +30,6 @@ export default function CartPage() {
   const belowMinimum = toBoolean(cart?.is_below_minimum);
   const progress = minOrder > 0 ? Math.min((subtotal / minOrder) * 100, 100) : 100;
   const amountToAdd = Math.max(minOrder - subtotal, 0);
-
-  const itemCount = useMemo(
-    () => cartItems.reduce((sum, item) => sum + (item.quantity || 0), 0),
-    [cartItems]
-  );
 
   const handleQty = async (item, delta) => {
     const nextQuantity = (item.quantity || 1) + delta;
@@ -126,7 +120,7 @@ export default function CartPage() {
           {cartItems.map((item) => (
             <div key={item.id} style={{ display: 'flex', gap: 16, padding: 16, background: C.surface, border: `1px solid ${C.outlineVariant}`, borderRadius: 12, marginBottom: 12, opacity: busyItem === item.id ? 0.6 : 1 }}>
               <div style={{ width: 80, height: 80, borderRadius: 8, background: C.surfaceContainer, flexShrink: 0, overflow: 'hidden' }}>
-                {item.menu_item_image ? <img src={item.menu_item_image} alt={item.menu_item_name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32 }}>ðŸ½ï¸</div>}
+                {item.menu_item_image ? <img src={resolveMediaUrl(item.menu_item_image)} alt={item.menu_item_name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', ...T.labelMd, color: C.onSurfaceVariant, fontWeight: 700 }}>Food</div>}
               </div>
               <div style={{ flex: 1 }}>
                 <h3 style={{ ...T.labelLg, fontWeight: 700, color: C.onSurface, margin: '0 0 4px 0' }}>{item.item_name || item.menu_item_name || 'Menu item'}</h3>
@@ -157,7 +151,7 @@ export default function CartPage() {
             <span style={{ ...T.titleMd, fontWeight: 700, color: C.saffron, fontSize: 20 }}>{formatCurrency(total)}</span>
           </div>
 
-          <Link to="/checkout" style={{ display: 'block', width: '100%', height: 48, background: belowMinimum ? C.surfaceContainer : C.saffron, color: belowMinimum ? C.onSurfaceVariant : '#fff', border: 'none', borderRadius: 12, ...T.labelLg, fontWeight: 700, cursor: belowMinimum ? 'not-allowed' : 'pointer', textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8, pointerEvents: belowMinimum ? 'none' : 'auto' }}>
+          <Link to="/checkout" style={{ width: '100%', height: 48, background: belowMinimum ? C.surfaceContainer : C.saffron, color: belowMinimum ? C.onSurfaceVariant : '#fff', border: 'none', borderRadius: 12, ...T.labelLg, fontWeight: 700, cursor: belowMinimum ? 'not-allowed' : 'pointer', textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8, pointerEvents: belowMinimum ? 'none' : 'auto' }}>
             {belowMinimum ? 'Add More Items' : <>Proceed to Checkout<ChevronRight size={20} style={{ marginLeft: 8 }} /></>}
           </Link>
 

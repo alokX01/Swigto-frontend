@@ -1,21 +1,12 @@
 ﻿import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
-import { ArrowRight, Clock, MapPin, Package, AlertCircle } from 'lucide-react';
+import { AlertCircle, ArrowRight, Package, PackageCheck } from 'lucide-react';
 import { useOrderStore } from '@/store/orderStore';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDateTime, resolveMediaUrl } from '@/lib/utils';
 import { T, C, S } from '@/lib/stitch';
 import { getApiError } from '@/lib/helpers';
-
-const STATUS_COLORS = {
-  PLACED: { bg: '#E8F5E9', color: '#2E7D32' },
-  ACCEPTED: { bg: '#E3F2FD', color: '#1565C0' },
-  PREPARING: { bg: '#FFF3E0', color: '#E65100' },
-  READY: { bg: '#F3E5F5', color: '#6A1B9A' },
-  PICKED_UP: { bg: '#FCE4EC', color: '#C2185B' },
-  DELIVERED: { bg: '#E0F2F1', color: '#00695C' },
-  CANCELLED: { bg: '#FFEBEE', color: '#C62828' },
-};
+import { canCustomerCancel, getOrderMeta, isActiveOrder, shortOrderId } from '@/lib/orderFlow';
 
 const FILTERS = [
   { value: 'ALL', label: 'All Orders' },
@@ -24,41 +15,51 @@ const FILTERS = [
   { value: 'CANCELLED', label: 'Cancelled' },
 ];
 
-const ACTIVE_STATUSES = ['PLACED', 'ACCEPTED', 'PREPARING', 'READY', 'PICKED_UP'];
-const STATUS_LABELS = {
-  PLACED: 'Order Placed',
-  ACCEPTED: 'Accepted',
-  PREPARING: 'Preparing',
-  READY: 'Ready',
-  PICKED_UP: 'Picked Up',
-  DELIVERED: 'Delivered',
-  CANCELLED: 'Cancelled',
-};
-
 export default function OrdersPage() {
   const [filter, setFilter] = useState('ALL');
-  const [page, setPage] = useState(1);
-  const { orders, isLoading, error, fetchOrders } = useOrderStore();
+  const [page] = useState(1);
+  const [busyOrderId, setBusyOrderId] = useState(null);
+  const { orders, isLoading, error, fetchOrders, cancelOrder } = useOrderStore();
 
   useEffect(() => {
+    let active = true;
     const loadOrders = async () => {
       try {
-        await fetchOrders({ page, limit: 20 });
+        if (active) await fetchOrders({ page, page_size: 20 });
       } catch (err) {
         toast.error(getApiError(err, 'Failed to load orders'));
       }
     };
     loadOrders();
+    const interval = window.setInterval(loadOrders, 5000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
   }, [page, fetchOrders]);
 
   const filteredOrders = useMemo(() => {
-    if (filter === 'ACTIVE') return orders.filter((order) => ACTIVE_STATUSES.includes(order.status));
+    if (filter === 'ACTIVE') return orders.filter((order) => isActiveOrder(order.status));
     if (filter === 'DELIVERED') return orders.filter((order) => order.status === 'DELIVERED');
     if (filter === 'CANCELLED') return orders.filter((order) => order.status === 'CANCELLED');
     return orders;
   }, [filter, orders]);
 
-  if (isLoading) {
+  const handleCancelOrder = async (orderId) => {
+    if (!window.confirm('Cancel this order?')) return;
+    setBusyOrderId(orderId);
+    try {
+      await cancelOrder(orderId, 'Cancelled by customer');
+      await fetchOrders({ page, page_size: 20 });
+      toast.success('Order cancelled');
+    } catch (err) {
+      toast.error(getApiError(err, 'Order cannot be cancelled now'));
+    } finally {
+      setBusyOrderId(null);
+    }
+  };
+
+  if (isLoading && !orders.length) {
     return (
       <div style={{ maxWidth: 1280, margin: '0 auto', padding: `${S.gutter}px` }}>
         <div style={{ height: 32, width: 200, background: C.surfaceContainer, borderRadius: 4, marginBottom: 24 }} />
@@ -91,7 +92,7 @@ export default function OrdersPage() {
     );
   }
 
-  const activeCount = orders.filter((order) => ACTIVE_STATUSES.includes(order.status)).length;
+  const activeCount = orders.filter((order) => isActiveOrder(order.status)).length;
 
   return (
     <div style={{ maxWidth: 1280, margin: '0 auto', padding: `${S.gutter}px` }}>
@@ -133,19 +134,24 @@ export default function OrdersPage() {
 
       {/* Orders List */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        {filteredOrders.map((order) => (
-          <Link key={order.id} to={`/orders/${order.id}`} style={{ textDecoration: 'none' }}>
+        {filteredOrders.map((order) => {
+          const meta = getOrderMeta(order.status);
+          const placedAt = order.placed_at || order.created_at;
+          const canCancel = canCustomerCancel(order.status);
+
+          return (
             <div
+              key={order.id}
               style={{
-                display: 'flex',
-                alignItems: 'center',
+                display: 'grid',
+                gridTemplateColumns: '64px 1fr auto',
                 gap: 16,
                 padding: 16,
                 background: C.surface,
                 border: `1px solid ${C.outlineVariant}`,
                 borderRadius: 12,
-                cursor: 'pointer',
                 transition: 'all 0.2s',
+                alignItems: 'center',
               }}
             >
               <div
@@ -161,14 +167,14 @@ export default function OrdersPage() {
                 }}
               >
                 {order.restaurant_image ? (
-                  <img src={order.restaurant_image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }} />
+                  <img src={resolveMediaUrl(order.restaurant_image)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }} />
                 ) : (
-                  <span style={{ fontSize: 24 }}>ðŸ½ï¸</span>
+                  <Package size={24} color={C.saffron} />
                 )}
               </div>
 
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 8 }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
                   <h3 style={{ ...T.labelLg, fontWeight: 700, color: C.onSurface, margin: 0 }}>
                     {order.restaurant_name || 'Order'}
                   </h3>
@@ -177,20 +183,20 @@ export default function OrdersPage() {
                       ...T.labelXs,
                       padding: '4px 12px',
                       borderRadius: 20,
-                      background: STATUS_COLORS[order.status]?.bg || C.surfaceContainer,
-                      color: STATUS_COLORS[order.status]?.color || C.onSurface,
+                      background: meta.bg,
+                      color: meta.color,
                       fontWeight: 700,
                     }}
                   >
-                    {STATUS_LABELS[order.status] || order.status}
+                    {meta.label}
                   </span>
                 </div>
                 <p style={{ ...T.bodySm, color: C.onSurfaceVariant, margin: '0 0 8px 0' }}>
-                  Order #{order.id?.slice(-6).toUpperCase() || 'N/A'} â€¢ {formatDate(order.created_at || new Date())}
+                  Order #{shortOrderId(order.id)} - {placedAt ? formatDateTime(placedAt) : 'Recently placed'}
                 </p>
-                <div style={{ display: 'flex', gap: 16 }}>
+                <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                   <span style={{ ...T.labelSm, color: C.onSurfaceVariant }}>
-                    {order.items?.length || 0} items
+                    {order.item_count || order.items?.length || 0} items
                   </span>
                   <span style={{ ...T.labelSm, color: C.onSurfaceVariant }}>
                     {order.payment_method || 'Payment'}
@@ -202,12 +208,51 @@ export default function OrdersPage() {
                 <p style={{ ...T.labelLg, fontWeight: 700, color: C.saffron, margin: 0 }}>
                   {formatCurrency(order.total_amount || 0)}
                 </p>
-                <ArrowRight size={20} color={C.outline} />
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                  {isActiveOrder(order.status) && (
+                    <Link to={`/orders/${order.id}/track`} style={{ ...orderActionLink, background: C.primary, color: '#fff' }}>
+                      <PackageCheck size={15} /> Track
+                    </Link>
+                  )}
+                  <Link to={`/orders/${order.id}`} style={{ ...orderActionLink, background: '#fff', color: C.primary, border: `1px solid ${C.outlineVariant}` }}>
+                    Details <ArrowRight size={15} />
+                  </Link>
+                  {canCancel && (
+                    <button type="button" onClick={() => handleCancelOrder(order.id)} disabled={busyOrderId === order.id} style={{ ...cancelButtonStyle, opacity: busyOrderId === order.id ? 0.65 : 1 }}>
+                      {busyOrderId === order.id ? 'Cancelling...' : 'Cancel'}
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
-          </Link>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
 }
+
+const orderActionLink = {
+  minHeight: 34,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 6,
+  padding: '7px 11px',
+  borderRadius: 9,
+  textDecoration: 'none',
+  ...T.labelMd,
+  fontWeight: 900,
+};
+
+const cancelButtonStyle = {
+  minHeight: 34,
+  padding: '7px 11px',
+  borderRadius: 9,
+  border: 'none',
+  background: C.errorContainer,
+  color: C.onErrorContainer,
+  ...T.labelMd,
+  fontWeight: 900,
+  cursor: 'pointer',
+};

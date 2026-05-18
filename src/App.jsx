@@ -4,7 +4,9 @@ import { Toaster } from 'sonner';
 import { useEffect } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { ProtectedRoute, PublicRoute } from '@/routes/ProtectedRoute';
+import { ProtectedRoute, PublicRoute, RoleRedirect } from '@/routes/ProtectedRoute';
+import { PageLoader } from '@/components/PageLoader';
+import { getRoleRedirectPath, normalizeRole } from '@/lib/helpers';
 
 // Layouts
 import { CustomerLayout } from '@/components/layouts/CustomerLayout';
@@ -46,6 +48,19 @@ const queryClient = new QueryClient({
   },
 });
 
+function CustomerAccess() {
+  const { isAuthenticated, isLoading, user } = useAuthStore();
+  const role = normalizeRole(user?.role || user?.user_type);
+
+  if (isLoading) return <PageLoader />;
+
+  if (isAuthenticated && role && role !== 'customer') {
+    return <Navigate to={getRoleRedirectPath(role)} replace />;
+  }
+
+  return <CustomerLayout />;
+}
+
 function AppRoutes() {
   const restoreSession = useAuthStore((s) => s.restoreSession);
 
@@ -59,7 +74,7 @@ function AppRoutes() {
       <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
 
       {/* Customer Portal */}
-      <Route element={<CustomerLayout />}>
+      <Route element={<CustomerAccess />}>
         {/* Public customer routes */}
         <Route path="/" element={<HomePage />} />
         <Route path="/search" element={<SearchPage />} />
@@ -96,7 +111,7 @@ function AppRoutes() {
       </Route>
 
       {/* Catch all */}
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<RoleRedirect />} />
     </Routes>
   );
 }

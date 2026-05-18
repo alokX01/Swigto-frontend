@@ -5,7 +5,7 @@ import { formatCurrency, getStatusInfo } from '@/lib/utils';
 import { Power, Navigation, Package, Star, LogOut, Truck } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { toast } from 'sonner';
-import { T, C, badge } from '@/lib/stitch';
+import { T, badge } from '@/lib/stitch';
 
 const surfaceCard = { background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, padding: 16 };
 const STATUS_COLORS = { PLACED: ['#DBEAFE','#1D4ED8'], ACCEPTED: ['#CFFAFE','#0E7490'], PREPARING: ['#FEF3C7','#B45309'], READY: ['#E9DDFF','#4F378A'], PICKED_UP: ['#E0E7FF','#4338CA'], DELIVERED: ['#D1FAE5','#065F46'], CANCELLED: ['#FFDAD6','#93000A'] };
@@ -17,8 +17,8 @@ export default function AgentDashboard() {
   const { data: ordersData } = useQuery({ queryKey: ['agentOrders'], queryFn: () => ordersAPI.agentOrders({ page_size: 20 }), refetchInterval: 10000 });
   const profile = profileData?.data;
   const orders = ordersData?.data?.results || ordersData?.data || [];
-  const toggleM = useMutation({ mutationFn: () => agentAPI.toggleAvailability(), onSuccess: () => { toast.success('Availability toggled!'); queryClient.invalidateQueries(['agentProfile']); } });
-  const updateM = useMutation({ mutationFn: ({ id, status }) => ordersAPI.updateStatus(id, { status }), onSuccess: () => { toast.success('Updated!'); queryClient.invalidateQueries(['agentOrders']); }, onError: e => toast.error(e.response?.data?.detail || 'Failed') });
+  const toggleM = useMutation({ mutationFn: () => agentAPI.toggleAvailability(), onSuccess: () => { toast.success('Availability toggled!'); queryClient.invalidateQueries({ queryKey: ['agentProfile'] }); } });
+  const updateM = useMutation({ mutationFn: ({ id, status }) => ordersAPI.updateStatus(id, { status }), onSuccess: () => { toast.success('Updated!'); queryClient.invalidateQueries({ queryKey: ['agentOrders'] }); }, onError: e => toast.error(e.response?.data?.detail || 'Failed') });
   const isOnline = profile?.status === 'AVAILABLE' || profile?.status === 'ONLINE';
 
   return (

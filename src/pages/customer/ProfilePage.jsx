@@ -1,21 +1,26 @@
 import { useEffect, useState } from 'react';
 import { useProfileStore } from '@/store/profileStore';
 import { useAuthStore } from '@/store/authStore';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Edit, Plus, Trash2, MapPin, LogOut, AlertCircle, Mail, Phone } from 'lucide-react';
+import { ChevronRight, Clock, Edit, LogOut, Mail, PackageCheck, Phone, Plus, ShoppingBag, Trash2, AlertCircle } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { addressSchema } from '@/lib/validators';
 import { T, C, S } from '@/lib/stitch';
 import { getApiError } from '@/lib/helpers';
+import { useOrderStore } from '@/store/orderStore';
+import { formatCurrency, formatDate } from '@/lib/utils';
+import { canCustomerCancel, getOrderMeta, isActiveOrder, shortOrderId } from '@/lib/orderFlow';
 
 export default function ProfilePage() {
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
   const { profile, addresses, isLoading, error, fetchProfile, fetchAddresses, addAddress, updateAddress, deleteAddress, setDefaultAddress } = useProfileStore();
+  const { orders, fetchOrders, cancelOrder } = useOrderStore();
   const [editingAddressId, setEditingAddressId] = useState(null);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [busyOrderId, setBusyOrderId] = useState(null);
 
   const addressForm = useForm({
     resolver: zodResolver(addressSchema),
@@ -31,7 +36,14 @@ export default function ProfilePage() {
   useEffect(() => {
     fetchProfile().catch((err) => toast.error(getApiError(err, 'Failed to load profile')));
     fetchAddresses().catch((err) => toast.error(getApiError(err, 'Failed to load addresses')));
-  }, [fetchProfile, fetchAddresses]);
+    fetchOrders({ page_size: 6 }).catch((err) => toast.error(getApiError(err, 'Failed to load orders')));
+
+    const interval = window.setInterval(() => {
+      fetchOrders({ page_size: 6 }).catch(() => {});
+    }, 5000);
+
+    return () => window.clearInterval(interval);
+  }, [fetchProfile, fetchAddresses, fetchOrders]);
 
   const handleAddAddress = async (data) => {
     try {
@@ -78,10 +90,27 @@ export default function ProfilePage() {
     }
   };
 
+  const handleCancelOrder = async (orderId) => {
+    if (!window.confirm('Cancel this order?')) return;
+    setBusyOrderId(orderId);
+    try {
+      await cancelOrder(orderId, 'Cancelled by customer');
+      await fetchOrders({ page_size: 6 });
+      toast.success('Order cancelled');
+    } catch (err) {
+      toast.error(getApiError(err, 'Order cannot be cancelled now'));
+    } finally {
+      setBusyOrderId(null);
+    }
+  };
+
   const handleLogout = () => {
     logout();
     navigate('/login');
   };
+
+  const activeOrders = orders.filter((order) => isActiveOrder(order.status));
+  const recentOrders = orders.slice(0, 4);
 
   if (isLoading) {
     return (
@@ -158,9 +187,45 @@ export default function ProfilePage() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, ...T.bodySm, color: C.onSurfaceVariant }}>
                 <Phone size={16} /> {user?.phone || 'Not added'}
               </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, ...T.bodySm, color: C.onSurfaceVariant }}>
+                <ShoppingBag size={16} /> {profile?.total_orders || orders.length || 0} orders
+              </div>
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Orders */}
+      <div style={{ background: C.surface, border: `1px solid ${C.outlineVariant}`, borderRadius: 12, padding: 24, marginBottom: 32 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, marginBottom: 18 }}>
+          <div>
+            <h2 style={{ ...T.titleLg, fontWeight: 800, color: C.onSurface, margin: 0 }}>Your Orders</h2>
+            <p style={{ ...T.bodySm, color: C.onSurfaceVariant, margin: '4px 0 0' }}>
+              {activeOrders.length} active order{activeOrders.length === 1 ? '' : 's'}
+            </p>
+          </div>
+          <Link to="/orders" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: C.primary, textDecoration: 'none', ...T.labelLg, fontWeight: 800 }}>
+            View all <ChevronRight size={16} />
+          </Link>
+        </div>
+
+        {recentOrders.length === 0 ? (
+          <div style={{ padding: 28, textAlign: 'center', background: C.surfaceContainerLow, borderRadius: 12 }}>
+            <ShoppingBag size={34} color={C.saffron} style={{ margin: '0 auto 10px' }} />
+            <p style={{ ...T.bodySm, color: C.onSurfaceVariant, margin: 0 }}>Your previous orders will appear here after checkout.</p>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gap: 12 }}>
+            {recentOrders.map((order) => (
+              <ProfileOrderCard
+                key={order.id}
+                order={order}
+                busy={busyOrderId === order.id}
+                onCancel={() => handleCancelOrder(order.id)}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Saved Addresses */}
@@ -384,7 +449,7 @@ export default function ProfilePage() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 8 }}>
                   <div>
                     <p style={{ ...T.labelMd, fontWeight: 700, color: C.onSurface, margin: 0 }}>
-                      {addr.label === 'HOME' ? 'ðŸ ' : addr.label === 'WORK' ? 'ðŸ’¼' : 'ðŸ“'} {addr.label}
+                      {getAddressTypeLabel(addr.label)}
                       {addr.is_default && <span style={{ ...T.labelXs, color: C.saffron, fontWeight: 700, marginLeft: 8 }}>DEFAULT</span>}
                     </p>
                   </div>
@@ -443,4 +508,82 @@ export default function ProfilePage() {
       </div>
     </div>
   );
+}
+
+function ProfileOrderCard({ order, busy, onCancel }) {
+  const meta = getOrderMeta(order.status);
+  const canCancel = canCustomerCancel(order.status);
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 16, alignItems: 'center', padding: 14, background: C.surfaceContainerLow, border: `1px solid ${C.outlineVariant}`, borderRadius: 12 }}>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+          <strong style={{ ...T.labelLg, color: C.onSurface }}>{order.restaurant_name || 'Restaurant'}</strong>
+          <span style={{ ...T.labelSm, fontWeight: 900, padding: '3px 9px', borderRadius: 999, background: meta.bg, color: meta.color }}>
+            {meta.shortLabel}
+          </span>
+        </div>
+        <p style={{ ...T.bodySm, color: C.onSurfaceVariant, margin: 0 }}>
+          #{shortOrderId(order.id)} - {order.item_count || order.items?.length || 0} items - {formatCurrency(order.total_amount || 0)}
+        </p>
+        <p style={{ ...T.labelSm, color: C.outline, margin: '4px 0 0' }}>
+          <Clock size={13} style={{ display: 'inline', marginRight: 4 }} />
+          {order.placed_at ? formatDate(order.placed_at) : 'Recently placed'}
+        </p>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+        {isActiveOrder(order.status) && (
+          <Link to={`/orders/${order.id}/track`} style={{ ...actionLinkStyle, background: C.primary, color: '#fff' }}>
+            <PackageCheck size={15} /> Track
+          </Link>
+        )}
+        <Link to={`/orders/${order.id}`} style={{ ...actionLinkStyle, background: '#fff', color: C.primary, border: `1px solid ${C.outlineVariant}` }}>
+          Details
+        </Link>
+        {canCancel && (
+          <button type="button" onClick={onCancel} disabled={busy} style={{ ...actionButtonStyle, opacity: busy ? 0.65 : 1 }}>
+            {busy ? 'Cancelling...' : 'Cancel'}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const actionLinkStyle = {
+  minHeight: 36,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 6,
+  padding: '7px 12px',
+  borderRadius: 9,
+  textDecoration: 'none',
+  ...T.labelMd,
+  fontWeight: 900,
+};
+
+const actionButtonStyle = {
+  minHeight: 36,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: '7px 12px',
+  borderRadius: 9,
+  border: 'none',
+  background: C.errorContainer,
+  color: C.onErrorContainer,
+  ...T.labelMd,
+  fontWeight: 900,
+  cursor: 'pointer',
+};
+
+function getAddressTypeLabel(label) {
+  const labels = {
+    HOME: 'Home',
+    WORK: 'Work',
+    OTHER: 'Other',
+  };
+  return labels[label] || label || 'Address';
 }

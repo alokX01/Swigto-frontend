@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useRestaurantOwnerStore } from '@/store/restaurantOwnerStore';
 import { useMenuManagementStore } from '@/store/menuManagementStore';
@@ -6,89 +6,134 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
-import { ArrowLeft, AlertCircle } from 'lucide-react';
+import { ArrowLeft, AlertCircle, Store } from 'lucide-react';
 import { T, C, S } from '@/lib/stitch';
 import { getApiError } from '@/lib/helpers';
+import { resolveMediaUrl } from '@/lib/utils';
+import { toFormData } from '@/lib/formData';
+
+const imageFallback = 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?q=80&w=800&auto=format&fit=crop';
 
 const menuItemSchema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters'),
+  name: z.string().trim().min(2, 'Name must be at least 2 characters'),
   description: z.string().optional(),
-  base_price: z.coerce.number().min(0, 'Price must be positive'),
+  base_price: z.coerce.number().positive('Price must be greater than 0'),
   is_veg: z.boolean().default(false),
   is_bestseller: z.boolean().default(false),
   is_available: z.boolean().default(true),
-  category: z.string().optional(),
-  order: z.coerce.number().optional(),
-  image: z.string().optional(),
+  category: z.string().min(1, 'Select a category'),
+  order: z.coerce.number().min(0).optional(),
 });
 
 export default function MenuItemFormPage() {
   const { itemId } = useParams();
   const navigate = useNavigate();
-  const { restaurant } = useRestaurantOwnerStore();
-  const { categories, selectedMenuItem, isLoading, error, fetchCategories, fetchMenuItem, createMenuItem, updateMenuItem } = useMenuManagementStore();
-  const [imagePreview, setImagePreview] = useState('');
+  const [imageFile, setImageFile] = useState(null);
+  const { restaurant, isLoading: restaurantLoading, fetchMyRestaurant } = useRestaurantOwnerStore();
+  const {
+    categories,
+    selectedMenuItem,
+    isLoading,
+    error,
+    fetchCategories,
+    fetchMenuItem,
+    createMenuItem,
+    updateMenuItem,
+  } = useMenuManagementStore();
 
   const form = useForm({
     resolver: zodResolver(menuItemSchema),
     defaultValues: {
       name: '',
       description: '',
-      base_price: 0,
+      base_price: 1,
       is_veg: false,
       is_bestseller: false,
       is_available: true,
       category: '',
       order: 0,
-      image: '',
     },
   });
 
+  const imagePreview = useMemo(() => (imageFile ? URL.createObjectURL(imageFile) : ''), [imageFile]);
+  const currentImage = imagePreview || selectedMenuItem?.image || '';
+
+  useEffect(() => {
+    fetchMyRestaurant().catch((err) => toast.error(getApiError(err, 'Failed to load restaurant')));
+  }, [fetchMyRestaurant]);
+
   useEffect(() => {
     if (restaurant?.id) {
-      fetchCategories(restaurant.id);
+      fetchCategories(restaurant.id).catch((err) => toast.error(getApiError(err, 'Failed to load categories')));
     }
   }, [restaurant?.id, fetchCategories]);
 
   useEffect(() => {
     if (itemId && restaurant?.id) {
-      fetchMenuItem(restaurant.id, itemId).then((item) => {
-        form.reset({
-          name: item.name,
-          description: item.description,
-          base_price: item.base_price,
-          is_veg: item.is_veg,
-          is_bestseller: item.is_bestseller,
-          is_available: item.is_available,
-          category: item.category || '',
-          order: item.order || 0,
-          image: item.image || '',
-        });
-        if (item.image) setImagePreview(item.image);
-      });
+      fetchMenuItem(restaurant.id, itemId).catch((err) => toast.error(getApiError(err, 'Failed to load item')));
     }
-  }, [itemId, restaurant?.id, fetchMenuItem, form]);
+  }, [itemId, restaurant?.id, fetchMenuItem]);
+
+  useEffect(() => {
+    if (!itemId && categories.length && !form.getValues('category')) {
+      form.setValue('category', categories[0].id, { shouldValidate: true });
+    }
+  }, [itemId, categories, form]);
+
+  useEffect(() => {
+    if (!itemId || !selectedMenuItem) return;
+    const inferredCategory = categories.find((cat) => (cat.items || []).some((item) => item.id === selectedMenuItem.id))?.id || selectedMenuItem.category || '';
+    form.reset({
+      name: selectedMenuItem.name || '',
+      description: selectedMenuItem.description || '',
+      base_price: Number.parseFloat(selectedMenuItem.base_price || selectedMenuItem.effective_price || 1),
+      is_veg: Boolean(selectedMenuItem.is_veg),
+      is_bestseller: Boolean(selectedMenuItem.is_bestseller),
+      is_available: selectedMenuItem.is_available !== false,
+      category: inferredCategory,
+      order: Number(selectedMenuItem.order || 0),
+    });
+  }, [itemId, selectedMenuItem, categories, form]);
+
+  useEffect(() => {
+    if (!imagePreview) return undefined;
+    return () => URL.revokeObjectURL(imagePreview);
+  }, [imagePreview]);
+
+  const handleImageChange = (event) => {
+    const file = event.target.files?.[0] || null;
+    if (file && !file.type.startsWith('image/')) {
+      toast.error('Please select a valid image file');
+      event.target.value = '';
+      return;
+    }
+    setImageFile(file);
+  };
 
   const onSubmit = async (data) => {
-    try {
-      // Build FormData to support file upload
-      const formData = new FormData();
-      Object.keys(data).forEach(key => {
-        if (key === 'image') {
-          // If it's a File object, append it. If it's a string (existing URL), skip it or the backend might reject it.
-          if (data[key] instanceof File) {
-            formData.append('image', data[key]);
-          }
-        } else if (data[key] !== undefined && data[key] !== null && data[key] !== '') {
-          formData.append(key, data[key]);
-        }
-      });
+    if (!restaurant?.id) {
+      toast.error('Register your restaurant first');
+      return;
+    }
 
+    const payload = toFormData({
+      name: data.name.trim(),
+      description: data.description?.trim() || '',
+      image: imageFile,
+      base_price: String(data.base_price),
+      is_veg: Boolean(data.is_veg),
+      is_bestseller: Boolean(data.is_bestseller),
+      is_available: Boolean(data.is_available),
+      order: Number(data.order || 0),
+      category: data.category,
+    });
+
+    try {
       if (itemId) {
-        await updateMenuItem(restaurant.id, itemId, formData);
+        await updateMenuItem(restaurant.id, itemId, payload);
         toast.success('Menu item updated');
       } else {
-        await createMenuItem(restaurant.id, formData);
+        await createMenuItem(restaurant.id, payload);
         toast.success('Menu item created');
       }
       navigate('/restaurant/menu');
@@ -97,36 +142,21 @@ export default function MenuItemFormPage() {
     }
   };
 
-  const handleImageChange = (e) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result);
-        form.setValue('image', file); // Store the actual File object
-      };
-      reader.readAsDataURL(file);
-    }
-  };
+  if (restaurantLoading && !restaurant) {
+    return (
+      <div style={{ maxWidth: 720, margin: '0 auto', padding: `${S.gutter}px`, display: 'grid', gap: 16 }}>
+        {[1, 2, 3].map((i) => <div key={i} style={{ height: 120, background: C.surfaceContainer, borderRadius: 16 }} />)}
+      </div>
+    );
+  }
 
   if (!restaurant) {
     return (
-      <div style={{ maxWidth: 1000, margin: '0 auto', padding: `${S.gutter}px`, textAlign: 'center' }}>
-        <h1 style={{ ...T.headlineMd, color: C.onSurface, marginBottom: 8 }}>Register Your Restaurant First</h1>
-        <p style={{ ...T.bodyMd, color: C.onSurfaceVariant, marginBottom: 24 }}>You must register your restaurant details before managing menu items.</p>
-        <button 
-          onClick={() => navigate('/restaurant/management')}
-          style={{
-            padding: '12px 24px',
-            background: C.saffron || '#F26E21',
-            color: '#fff',
-            border: 'none',
-            borderRadius: 12,
-            ...T.labelLg,
-            fontWeight: 600,
-            cursor: 'pointer'
-          }}
-        >
+      <div style={{ maxWidth: 720, margin: '48px auto', padding: `${S.gutter}px`, textAlign: 'center', background: '#fff', border: `1px solid ${C.outlineVariant}`, borderRadius: 16 }}>
+        <Store size={44} color={C.saffron} style={{ margin: '0 auto 16px' }} />
+        <h1 style={{ ...T.headlineMd, color: C.onSurface, margin: 0 }}>Register Your Restaurant First</h1>
+        <p style={{ ...T.bodySm, color: C.onSurfaceVariant, margin: '8px 0 24px' }}>You need a restaurant profile before adding dishes.</p>
+        <button onClick={() => navigate('/restaurant/management')} style={{ padding: '12px 24px', background: C.saffron, color: '#fff', border: 'none', borderRadius: 12, ...T.labelLg, fontWeight: 700, cursor: 'pointer' }}>
           Register Restaurant
         </button>
       </div>
@@ -135,283 +165,131 @@ export default function MenuItemFormPage() {
 
   if (error && !selectedMenuItem && itemId) {
     return (
-      <div style={{ maxWidth: 600, margin: '0 auto', padding: `${S.gutter}px` }}>
+      <div style={{ maxWidth: 600, margin: '0 auto', padding: `${S.gutter}px`, textAlign: 'center' }}>
         <AlertCircle size={48} color={C.error} style={{ margin: '24px auto' }} />
-        <p style={{ ...T.bodyMd, color: C.onSurfaceVariant, textAlign: 'center' }}>
-          {getApiError(error, 'Failed to load item')}
-        </p>
+        <p style={{ ...T.bodySm, color: C.onSurfaceVariant }}>{getApiError(error, 'Failed to load item')}</p>
       </div>
     );
   }
 
   return (
-    <div style={{ maxWidth: 600, margin: '0 auto', padding: `${S.gutter}px` }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 32 }}>
-        <button
-          onClick={() => navigate('/restaurant/menu')}
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: 8,
-            border: 'none',
-            background: C.surfaceContainer,
-            color: C.onSurface,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
+    <div style={{ maxWidth: 760, margin: '0 auto', padding: `${S.gutter}px` }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
+        <button onClick={() => navigate('/restaurant/menu')} style={{ width: 40, height: 40, borderRadius: 10, border: 'none', background: C.surfaceContainer, color: C.onSurface, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <ArrowLeft size={20} />
         </button>
         <div>
-          <h1 style={{ ...T.headlineMd, color: C.onSurface, margin: 0 }}>
-            {itemId ? 'Edit Menu Item' : 'Add Menu Item'}
-          </h1>
+          <h1 style={{ ...T.headlineMd, color: C.onSurface, margin: 0 }}>{itemId ? 'Edit Menu Item' : 'Add Menu Item'}</h1>
+          <p style={{ ...T.bodySm, color: C.onSurfaceVariant, margin: '4px 0 0' }}>{restaurant.name}</p>
         </div>
       </div>
 
-      {/* Form */}
-      <form onSubmit={form.handleSubmit(onSubmit)} style={{ display: 'grid', gap: 24 }}>
-        {/* Image Upload */}
-        <div style={{ background: C.surface, border: `1px solid ${C.outlineVariant}`, borderRadius: 12, padding: 20 }}>
-          <label style={{ ...T.labelSm, color: C.onSurfaceVariant, display: 'block', marginBottom: 12, fontWeight: 600 }}>
-            Item Image
-          </label>
-          {imagePreview && (
-            <img
-              src={imagePreview}
-              alt="Preview"
-              style={{
-                width: '100%',
-                height: 200,
-                objectFit: 'cover',
-                borderRadius: 8,
-                marginBottom: 12,
-              }}
-            />
-          )}
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handleImageChange}
-            style={{
-              display: 'block',
-              width: '100%',
-              padding: '12px',
-              border: `2px dashed ${C.outline}`,
-              borderRadius: 8,
-              background: C.surfaceContainerLow,
-              cursor: 'pointer',
-              ...T.bodySm,
-            }}
-          />
-        </div>
-
-        {/* Basic Info */}
-        <div style={{ background: C.surface, border: `1px solid ${C.outlineVariant}`, borderRadius: 12, padding: 20 }}>
-          <h2 style={{ ...T.labelMd, fontWeight: 700, color: C.onSurface, margin: '0 0 16px 0' }}>Basic Information</h2>
-
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ ...T.labelSm, color: C.onSurfaceVariant, display: 'block', marginBottom: 6, fontWeight: 600 }}>
-              Item Name *
-            </label>
-            <input
-              {...form.register('name')}
-              placeholder="e.g., Butter Chicken, Margherita Pizza"
-              style={{
-                width: '100%',
-                height: 44,
-                padding: '8px 12px',
-                background: '#fff',
-                border: `1px solid ${C.outline}`,
-                borderRadius: 8,
-                ...T.bodySm,
-                fontFamily: 'inherit',
-              }}
-            />
-            {form.formState.errors.name && (
-              <small style={{ color: C.error, display: 'block', marginTop: 4 }}>
-                {form.formState.errors.name.message}
-              </small>
-            )}
-          </div>
-
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ ...T.labelSm, color: C.onSurfaceVariant, display: 'block', marginBottom: 6, fontWeight: 600 }}>
-              Description
-            </label>
-            <textarea
-              {...form.register('description')}
-              placeholder="Describe your item... (ingredients, preparation details, etc.)"
-              style={{
-                width: '100%',
-                height: 100,
-                padding: '8px 12px',
-                background: '#fff',
-                border: `1px solid ${C.outline}`,
-                borderRadius: 8,
-                ...T.bodySm,
-                fontFamily: 'inherit',
-                resize: 'vertical',
-              }}
-            />
-          </div>
-
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ ...T.labelSm, color: C.onSurfaceVariant, display: 'block', marginBottom: 6, fontWeight: 600 }}>
-              Base Price (₹) *
-            </label>
-            <input
-              {...form.register('base_price')}
-              type="number"
-              step="0.01"
-              min="0"
-              placeholder="0"
-              style={{
-                width: '100%',
-                height: 44,
-                padding: '8px 12px',
-                background: '#fff',
-                border: `1px solid ${C.outline}`,
-                borderRadius: 8,
-                ...T.bodySm,
-                fontFamily: 'inherit',
-              }}
-            />
-            {form.formState.errors.base_price && (
-              <small style={{ color: C.error, display: 'block', marginTop: 4 }}>
-                {form.formState.errors.base_price.message}
-              </small>
-            )}
-          </div>
-        </div>
-
-        {/* Category & Attributes */}
-        <div style={{ background: C.surface, border: `1px solid ${C.outlineVariant}`, borderRadius: 12, padding: 20 }}>
-          <h2 style={{ ...T.labelMd, fontWeight: 700, color: C.onSurface, margin: '0 0 16px 0' }}>Category & Attributes</h2>
-
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ ...T.labelSm, color: C.onSurfaceVariant, display: 'block', marginBottom: 6, fontWeight: 600 }}>
-              Category
-            </label>
-            <select
-              {...form.register('category')}
-              style={{
-                width: '100%',
-                height: 44,
-                padding: '8px 12px',
-                background: '#fff',
-                border: `1px solid ${C.outline}`,
-                borderRadius: 8,
-                ...T.bodySm,
-                fontFamily: 'inherit',
-              }}
-            >
-              <option value="">Select Category</option>
-              {categories.map((cat) => (
-                <option key={cat.id} value={cat.id}>
-                  {cat.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px', background: C.surfaceContainerLow, borderRadius: 8, cursor: 'pointer' }}>
-              <input
-                {...form.register('is_veg')}
-                type="checkbox"
-                style={{ width: 18, height: 18, cursor: 'pointer' }}
-              />
-              <span style={{ ...T.labelSm, fontWeight: 600, color: C.onSurface }}>Vegetarian</span>
-            </label>
-
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px', background: C.surfaceContainerLow, borderRadius: 8, cursor: 'pointer' }}>
-              <input
-                {...form.register('is_bestseller')}
-                type="checkbox"
-                style={{ width: 18, height: 18, cursor: 'pointer' }}
-              />
-              <span style={{ ...T.labelSm, fontWeight: 600, color: C.onSurface }}>Bestseller</span>
-            </label>
-
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px', background: C.surfaceContainerLow, borderRadius: 8, cursor: 'pointer' }}>
-              <input
-                {...form.register('is_available')}
-                type="checkbox"
-                style={{ width: 18, height: 18, cursor: 'pointer' }}
-              />
-              <span style={{ ...T.labelSm, fontWeight: 600, color: C.onSurface }}>Available</span>
-            </label>
-          </div>
-
-          <div style={{ marginTop: 16 }}>
-            <label style={{ ...T.labelSm, color: C.onSurfaceVariant, display: 'block', marginBottom: 6, fontWeight: 600 }}>
-              Display Order
-            </label>
-            <input
-              {...form.register('order')}
-              type="number"
-              min="0"
-              placeholder="0"
-              style={{
-                width: '100%',
-                height: 44,
-                padding: '8px 12px',
-                background: '#fff',
-                border: `1px solid ${C.outline}`,
-                borderRadius: 8,
-                ...T.bodySm,
-                fontFamily: 'inherit',
-              }}
-            />
-            <small style={{ ...T.labelXs, color: C.onSurfaceVariant, display: 'block', marginTop: 4 }}>
-              Lower numbers appear first
-            </small>
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div style={{ display: 'flex', gap: 12 }}>
-          <button
-            type="submit"
-            disabled={isLoading}
-            style={{
-              flex: 1,
-              padding: '12px 24px',
-              background: C.saffron,
-              color: '#fff',
-              border: 'none',
-              borderRadius: 8,
-              ...T.labelMd,
-              fontWeight: 600,
-              cursor: isLoading ? 'not-allowed' : 'pointer',
-              opacity: isLoading ? 0.6 : 1,
-            }}
-          >
-            {isLoading ? 'Saving...' : itemId ? 'Update Item' : 'Create Item'}
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate('/restaurant/menu')}
-            style={{
-              flex: 1,
-              padding: '12px 24px',
-              background: C.surfaceContainer,
-              color: C.onSurface,
-              border: 'none',
-              borderRadius: 8,
-              ...T.labelMd,
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            Cancel
+      {categories.length === 0 ? (
+        <div style={{ background: '#fff', border: `1px solid ${C.outlineVariant}`, borderRadius: 16, padding: 32, textAlign: 'center' }}>
+          <h2 style={{ ...T.headlineSm, color: C.onSurface, margin: 0 }}>Create a category first</h2>
+          <p style={{ ...T.bodySm, color: C.onSurfaceVariant, margin: '8px 0 20px' }}>The backend requires every menu item to belong to a category.</p>
+          <button onClick={() => navigate('/restaurant/menu')} style={{ padding: '10px 20px', background: C.saffron, color: '#fff', border: 'none', borderRadius: 10, ...T.labelLg, fontWeight: 700, cursor: 'pointer' }}>
+            Go to Categories
           </button>
         </div>
-      </form>
+      ) : (
+        <form onSubmit={form.handleSubmit(onSubmit)} style={{ display: 'grid', gap: 18 }}>
+          <section style={sectionStyle}>
+            <h2 style={sectionHeading}>Image</h2>
+            <img src={resolveMediaUrl(currentImage) || imageFallback} alt="Menu preview" style={{ width: '100%', height: 220, objectFit: 'cover', borderRadius: 12, marginBottom: 12, background: C.surfaceContainer }} onError={(event) => { event.currentTarget.src = imageFallback; }} />
+            <Field label="Item Image">
+              <input type="file" accept="image/*" onChange={handleImageChange} style={{ ...inputStyle, paddingTop: 10 }} />
+            </Field>
+          </section>
+
+          <section style={sectionStyle}>
+            <h2 style={sectionHeading}>Basic Information</h2>
+            <Field label="Item Name" error={form.formState.errors.name?.message}>
+              <input {...form.register('name')} placeholder="e.g. Paneer Tikka Platter" style={inputStyle} />
+            </Field>
+            <Field label="Description">
+              <textarea {...form.register('description')} placeholder="Ingredients, taste notes, portion size" style={{ ...inputStyle, height: 96, paddingTop: 12, resize: 'vertical' }} />
+            </Field>
+            <Field label="Base Price (INR)" error={form.formState.errors.base_price?.message}>
+              <input {...form.register('base_price')} type="number" step="0.01" min="1" style={inputStyle} />
+            </Field>
+          </section>
+
+          <section style={sectionStyle}>
+            <h2 style={sectionHeading}>Category & Attributes</h2>
+            <Field label="Category" error={form.formState.errors.category?.message}>
+              <select {...form.register('category')} style={inputStyle}>
+                <option value="">Select Category</option>
+                {categories.map((cat) => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
+              </select>
+            </Field>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
+              <CheckField label="Vegetarian" register={form.register('is_veg')} />
+              <CheckField label="Bestseller" register={form.register('is_bestseller')} />
+              <CheckField label="Available" register={form.register('is_available')} />
+            </div>
+
+            <div style={{ marginTop: 14 }}>
+              <Field label="Display Order">
+                <input {...form.register('order')} type="number" min="0" style={inputStyle} />
+              </Field>
+            </div>
+          </section>
+
+          <div style={{ display: 'flex', gap: 12 }}>
+            <button type="submit" disabled={isLoading} style={{ flex: 1, padding: '12px 24px', background: C.saffron, color: '#fff', border: 'none', borderRadius: 10, ...T.labelLg, fontWeight: 800, cursor: isLoading ? 'not-allowed' : 'pointer', opacity: isLoading ? 0.65 : 1 }}>
+              {isLoading ? 'Saving...' : itemId ? 'Update Item' : 'Create Item'}
+            </button>
+            <button type="button" onClick={() => navigate('/restaurant/menu')} style={{ flex: 1, padding: '12px 24px', background: C.surfaceContainer, color: C.onSurface, border: 'none', borderRadius: 10, ...T.labelLg, fontWeight: 700, cursor: 'pointer' }}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
     </div>
+  );
+}
+
+const sectionStyle = {
+  background: '#fff',
+  border: `1px solid ${C.outlineVariant}`,
+  borderRadius: 16,
+  padding: 20,
+};
+
+const sectionHeading = {
+  ...T.headlineSm,
+  color: C.onSurface,
+  margin: '0 0 16px',
+};
+
+const inputStyle = {
+  width: '100%',
+  minHeight: 46,
+  padding: '0 14px',
+  background: '#fff',
+  border: `1px solid ${C.outlineVariant}`,
+  borderRadius: 10,
+  ...T.bodySm,
+  outline: 'none',
+};
+
+function Field({ label, error, children }) {
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <label style={{ ...T.labelSm, color: C.onSurfaceVariant, display: 'block', marginBottom: 6, fontWeight: 800, textTransform: 'uppercase' }}>{label}</label>
+      {children}
+      {error && <small style={{ color: C.error, display: 'block', marginTop: 4 }}>{error}</small>}
+    </div>
+  );
+}
+
+function CheckField({ label, register }) {
+  return (
+    <label style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 12, background: C.surfaceContainerLow, borderRadius: 10, cursor: 'pointer' }}>
+      <input {...register} type="checkbox" style={{ width: 18, height: 18, cursor: 'pointer' }} />
+      <span style={{ ...T.labelSm, fontWeight: 800, color: C.onSurface }}>{label}</span>
+    </label>
   );
 }

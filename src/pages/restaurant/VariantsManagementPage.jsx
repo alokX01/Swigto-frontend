@@ -3,18 +3,22 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useRestaurantOwnerStore } from '@/store/restaurantOwnerStore';
 import { useMenuManagementStore } from '@/store/menuManagementStore';
 import { toast } from 'sonner';
-import { Plus, Edit, Trash2, AlertCircle, ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import { Plus, Edit, Trash2, AlertCircle, ArrowLeft } from 'lucide-react';
 import { T, C, S } from '@/lib/stitch';
 import { getApiError, formatCurrency } from '@/lib/helpers';
 
 export default function VariantsManagementPage() {
   const { itemId } = useParams();
   const navigate = useNavigate();
-  const { restaurant } = useRestaurantOwnerStore();
+  const { restaurant, fetchMyRestaurant } = useRestaurantOwnerStore();
   const { selectedMenuItem, variants, isLoading, error, fetchMenuItem, fetchVariants, createVariant, updateVariant, deleteVariant } = useMenuManagementStore();
   const [isAddingVariant, setIsAddingVariant] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({ name: '', price: 0, is_available: true });
+
+  useEffect(() => {
+    fetchMyRestaurant().catch((err) => toast.error(getApiError(err, 'Failed to load restaurant')));
+  }, [fetchMyRestaurant]);
 
   useEffect(() => {
     if (restaurant?.id && itemId) {
