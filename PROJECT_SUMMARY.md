@@ -59,7 +59,7 @@
 - **socket.io-client 4.8.3** - Real-time order tracking
 
 ### Backend API
-- **Django REST at:** http://ec2-13-233-183-223.ap-south-1.compute.amazonaws.com/api/docs/
+- **Django REST at:** https://api.foodrevolut.abhayvii.dev/api/docs/
 - **40+ endpoints** across: auth, cart, orders, payments, profiles, restaurants, reviews
 - **Authentication:** JWT tokens with refresh mechanism
 
@@ -477,7 +477,7 @@ ProfilePage Edit Address Button
 ### Issue 2: Missing environment variables
 **Solution:** Create `.env.local`:
 ```
-VITE_API_URL=http://ec2-13-233-183-223.ap-south-1.compute.amazonaws.com/api
+VITE_API_BASE_URL=https://api.foodrevolut.abhayvii.dev/api/v1
 VITE_RAZORPAY_KEY_ID=your_key_here
 ```
 
@@ -546,9 +546,9 @@ pnpm run preview
 ### Environment Setup
 Create `.env.local`:
 ```
-VITE_API_URL=http://ec2-13-233-183-223.ap-south-1.compute.amazonaws.com/api
+VITE_API_BASE_URL=https://api.foodrevolut.abhayvii.dev/api/v1
 VITE_RAZORPAY_KEY_ID=rzp_test_xxxxx
-VITE_SOCKET_URL=http://your-backend:8000
+VITE_WS_BASE_URL=wss://api.foodrevolut.abhayvii.dev
 ```
 
 ---

@@ -34,6 +34,23 @@ const readStoredUser = () => {
   }
 };
 
+const pickFirst = (...values) => values.find((value) => value !== null && value !== undefined && value !== '');
+
+const getLoginTokens = (data = {}) => {
+  const source = data.tokens || data.token || data;
+  return {
+    access: pickFirst(source.access, source.access_token, source.accessToken, data.access, data.access_token, data.accessToken),
+    refresh: pickFirst(source.refresh, source.refresh_token, source.refreshToken, data.refresh, data.refresh_token, data.refreshToken),
+  };
+};
+
+const getLoginUser = (data = {}) => {
+  const user = data.user || data.profile || data.data?.user || data.data?.profile;
+  if (user) return normalizeUser(user);
+  if (data.email || data.role || data.user_type) return normalizeUser(data);
+  return null;
+};
+
 const storedAccessToken = readStorage('accessToken');
 const storedUser = readStoredUser();
 
@@ -45,13 +62,13 @@ export const useAuthStore = create((set, get) => ({
 
   setToken: (token) => {
     writeStorage('accessToken', token);
-    set({ accessToken: token });
+    set({ accessToken: token || null });
   },
 
   setUser: (user) => {
     const normalized = normalizeUser(user);
-    writeStorage('user', JSON.stringify(normalized));
-    set({ user: normalized, isAuthenticated: true, isLoading: false });
+    writeStorage('user', normalized ? JSON.stringify(normalized) : null);
+    set({ user: normalized, isAuthenticated: Boolean(normalized), isLoading: false });
   },
 
   clearSession: () => {
@@ -61,16 +78,28 @@ export const useAuthStore = create((set, get) => ({
     set({ user: null, accessToken: null, isAuthenticated: false, isLoading: false });
   },
 
-  login: async (data) => {
+  login: async (data, selectedRole) => {
     const res = await authAPI.login(data);
-    const { access, refresh } = res.data.tokens || res.data;
-    get().setToken(access);
-    writeStorage('refreshToken', refresh);
+    const { access, refresh } = getLoginTokens(res.data);
+    const loginUser = getLoginUser(res.data);
+    const fallbackUser = loginUser
+      ? { ...loginUser, role: loginUser.role || normalizeRole(selectedRole) }
+      : null;
 
-    // Fetch user info
-    const meRes = await authAPI.getMe();
-    get().setUser(meRes.data);
-    return meRes.data;
+    if (access) get().setToken(access);
+    if (refresh) writeStorage('refreshToken', refresh);
+
+    try {
+      const meRes = await authAPI.getMe();
+      get().setUser(meRes.data);
+      return meRes.data;
+    } catch (error) {
+      if (fallbackUser) {
+        get().setUser(fallbackUser);
+        return fallbackUser;
+      }
+      throw error;
+    }
   },
 
   logout: async () => {
@@ -88,30 +117,35 @@ export const useAuthStore = create((set, get) => ({
     const cachedAccess = readStorage('accessToken');
     const cachedUser = readStoredUser();
 
-    if (cachedAccess && cachedUser) {
+    if (cachedAccess) {
       set({ accessToken: cachedAccess, user: cachedUser, isAuthenticated: true, isLoading: false });
+      try {
+        const meRes = await authAPI.getMe();
+        get().setUser(meRes.data);
+        return;
+      } catch (error) {
+        if (error?.response?.status !== 401 || !refresh) {
+          set({ isLoading: false });
+          return;
+        }
+      }
     }
 
     if (!refresh) {
-      if (!cachedAccess) get().clearSession();
-      else set({ isLoading: false });
+      if (cachedUser) set({ user: cachedUser, isAuthenticated: true, isLoading: false });
+      else get().clearSession();
       return;
     }
 
     try {
       const tokenRes = await authAPI.refreshToken(refresh);
-      const newAccess = tokenRes.data.access;
-      get().setToken(newAccess);
-
+      const { access } = getLoginTokens(tokenRes.data);
+      if (access) get().setToken(access);
       const meRes = await authAPI.getMe();
       get().setUser(meRes.data);
-    } catch (error) {
-      const status = error?.response?.status;
-      if (!status || status >= 500) {
-        set({ isLoading: false });
-        return;
-      }
-      get().clearSession();
+    } catch {
+      if (cachedUser) set({ user: cachedUser, isAuthenticated: true, isLoading: false });
+      else get().clearSession();
     }
   },
 

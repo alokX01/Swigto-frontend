@@ -6,7 +6,7 @@ import { formatCurrency, formatDateTime, getStatusInfo } from '@/lib/utils';
 import { getApiError, toNumber } from '@/lib/helpers';
 import { useRestaurantOwnerStore } from '@/store/restaurantOwnerStore';
 import { toast } from 'sonner';
-import { CheckCircle, ChefHat, Clock, MapPin, Package, ReceiptText, Store, User, X } from 'lucide-react';
+import { CheckCircle, ChefHat, Clock, MapPin, Package, ReceiptText, Store, User, X, XCircle } from 'lucide-react';
 import { T, C, card } from '@/lib/stitch';
 
 const STATUS_COLS = [
@@ -32,6 +32,12 @@ const NEXT_ACTIONS = {
     label: 'Mark Ready',
     note: 'Order is ready for pickup',
   },
+};
+
+const REJECT_ACTION = {
+  status: 'CANCELLED',
+  label: 'Reject Order',
+  note: 'Order rejected by restaurant',
 };
 
 const ORDER_CARD_BG = {
@@ -87,6 +93,12 @@ export default function RestaurantOrdersPage() {
     const action = NEXT_ACTIONS[order.status];
     if (!action) return;
     updateStatus.mutate({ id: order.id, action });
+  };
+
+  const rejectOrder = (order) => {
+    if (order.status !== 'PLACED') return;
+    if (!window.confirm('Reject this customer order?')) return;
+    updateStatus.mutate({ id: order.id, action: REJECT_ACTION });
   };
 
   if (isLoading && !restaurant) {
@@ -152,6 +164,7 @@ export default function RestaurantOrdersPage() {
                     order={order}
                     onView={() => setSelectedOrderId(order.id)}
                     onMove={() => moveOrder(order)}
+                    onReject={() => rejectOrder(order)}
                     isBusy={updateStatus.isPending && updateStatus.variables?.id === order.id}
                   />
                 ))}
@@ -168,6 +181,7 @@ export default function RestaurantOrdersPage() {
           loading={detailLoading}
           onClose={() => setSelectedOrderId(null)}
           onMove={moveOrder}
+          onReject={rejectOrder}
           isBusy={updateStatus.isPending}
         />
       )}
@@ -184,8 +198,9 @@ function StatCard({ label, value, accent = C.primary }) {
   );
 }
 
-function OrderCard({ order, onView, onMove, isBusy }) {
+function OrderCard({ order, onView, onMove, onReject, isBusy }) {
   const action = NEXT_ACTIONS[order.status];
+  const canReject = order.status === 'PLACED';
   const placedAt = order.placed_at || order.created_at;
 
   return (
@@ -202,10 +217,15 @@ function OrderCard({ order, onView, onMove, isBusy }) {
         {order.item_count || order.items?.length || 0} items - {order.payment_method || 'Payment'}
       </p>
 
-      <div style={{ display: 'grid', gridTemplateColumns: action ? '1fr 1fr' : '1fr', gap: 8 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: action ? (canReject ? '1fr 1fr 1fr' : '1fr 1fr') : '1fr', gap: 8 }}>
         <button type="button" onClick={onView} style={secondaryButtonStyle}>
           <ReceiptText size={15} /> View Items
         </button>
+        {canReject && (
+          <button type="button" onClick={onReject} disabled={isBusy} style={{ ...dangerButtonStyle, minHeight: 38, padding: '8px 10px', opacity: isBusy ? 0.65 : 1 }}>
+            <XCircle size={15} /> Reject
+          </button>
+        )}
         {action && (
           <button type="button" onClick={onMove} disabled={isBusy} style={{ ...primaryButtonStyle, minHeight: 38, padding: '8px 10px', opacity: isBusy ? 0.65 : 1 }}>
             {isBusy ? 'Updating...' : action.label}
@@ -216,8 +236,9 @@ function OrderCard({ order, onView, onMove, isBusy }) {
   );
 }
 
-function OrderDetailPanel({ order, loading, onClose, onMove, isBusy }) {
+function OrderDetailPanel({ order, loading, onClose, onMove, onReject, isBusy }) {
   const action = order ? NEXT_ACTIONS[order.status] : null;
+  const canReject = order?.status === 'PLACED';
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(15, 23, 42, 0.42)', display: 'flex', justifyContent: 'flex-end' }} onClick={onClose}>
@@ -283,10 +304,19 @@ function OrderDetailPanel({ order, loading, onClose, onMove, isBusy }) {
               </section>
             )}
 
-            {action && (
-              <button type="button" onClick={() => onMove(order)} disabled={isBusy} style={{ ...primaryButtonStyle, width: '100%', minHeight: 48, opacity: isBusy ? 0.65 : 1 }}>
-                {isBusy ? 'Updating...' : action.label}
-              </button>
+            {(action || canReject) && (
+              <div style={{ display: 'grid', gridTemplateColumns: canReject && action ? '1fr 1fr' : '1fr', gap: 10 }}>
+                {canReject && (
+                  <button type="button" onClick={() => onReject(order)} disabled={isBusy} style={{ ...dangerButtonStyle, width: '100%', minHeight: 48, opacity: isBusy ? 0.65 : 1 }}>
+                    {isBusy ? 'Updating...' : REJECT_ACTION.label}
+                  </button>
+                )}
+                {action && (
+                  <button type="button" onClick={() => onMove(order)} disabled={isBusy} style={{ ...primaryButtonStyle, width: '100%', minHeight: 48, opacity: isBusy ? 0.65 : 1 }}>
+                    {isBusy ? 'Updating...' : action.label}
+                  </button>
+                )}
+              </div>
             )}
           </>
         ) : (
@@ -332,6 +362,22 @@ const secondaryButtonStyle = {
   background: '#fff',
   color: C.primary,
   border: `1px solid ${C.outlineVariant}`,
+  borderRadius: 10,
+  ...T.labelMd,
+  fontWeight: 800,
+  cursor: 'pointer',
+};
+
+const dangerButtonStyle = {
+  minHeight: 38,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 8,
+  padding: '8px 14px',
+  background: C.error,
+  color: '#fff',
+  border: 'none',
   borderRadius: 10,
   ...T.labelMd,
   fontWeight: 800,

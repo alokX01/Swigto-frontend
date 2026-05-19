@@ -41,7 +41,7 @@ export default function CartPage() {
       } else {
         await updateItem(item.id, {
           menu_item: item.menu_item,
-          variant: item.variant ?? null,
+          variant: item.variant,
           quantity: nextQuantity,
         });
       }

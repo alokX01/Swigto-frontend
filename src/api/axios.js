@@ -6,6 +6,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 15000,
+  withCredentials: true,
 });
 
 // Track if we're currently refreshing to prevent multiple refresh calls
@@ -23,7 +24,7 @@ const processQueue = (error, token = null) => {
 // Request interceptor — attach Bearer token
 api.interceptors.request.use(
   (config) => {
-    const token = useAuthStore.getState().accessToken;
+    const token = useAuthStore.getState().accessToken || localStorage.getItem('accessToken');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -63,8 +64,6 @@ api.interceptors.response.use(
       try {
         const refreshToken = localStorage.getItem('refreshToken');
         if (!refreshToken) {
-          useAuthStore.getState().clearSession();
-          window.location.href = '/login';
           throw new Error('No refresh token');
         }
 
@@ -83,7 +82,6 @@ api.interceptors.response.use(
         const status = refreshError?.response?.status;
         if (status && status < 500) {
           useAuthStore.getState().clearSession();
-          window.location.href = '/login';
         }
         return Promise.reject(refreshError);
       } finally {
