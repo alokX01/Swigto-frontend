@@ -122,7 +122,7 @@ export default function ProfilePage() {
     );
   }
 
-  if (error) {
+  if (error && !user) {
     return (
       <div style={{ maxWidth: 1000, margin: '0 auto', padding: `${S.gutter}px`, textAlign: 'center' }}>
         <AlertCircle size={48} color={C.error} style={{ margin: '24px auto' }} />

@@ -3,6 +3,14 @@ import { useAuthStore } from '@/store/authStore';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
+const readStorage = (key) => {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+};
+
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 15000,
@@ -24,7 +32,7 @@ const processQueue = (error, token = null) => {
 // Request interceptor — attach Bearer token
 api.interceptors.request.use(
   (config) => {
-    const token = useAuthStore.getState().accessToken || localStorage.getItem('accessToken');
+    const token = useAuthStore.getState().accessToken || readStorage('accessToken');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -62,17 +70,23 @@ api.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        const refreshToken = localStorage.getItem('refreshToken');
+        const refreshToken = readStorage('refreshToken');
         if (!refreshToken) {
+          useAuthStore.getState().clearSession();
           throw new Error('No refresh token');
         }
 
         const { data } = await axios.post(`${API_BASE_URL}/auth/token/refresh/`, {
           refresh: refreshToken,
+        }, {
+          withCredentials: true,
         });
 
         const newAccessToken = data.access;
+        if (!newAccessToken) throw new Error('No access token returned');
+
         useAuthStore.getState().setToken(newAccessToken);
+        if (data.refresh) useAuthStore.getState().setRefreshToken(data.refresh);
 
         processQueue(null, newAccessToken);
         originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;

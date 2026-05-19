@@ -65,6 +65,10 @@ export const useAuthStore = create((set, get) => ({
     set({ accessToken: token || null });
   },
 
+  setRefreshToken: (token) => {
+    writeStorage('refreshToken', token);
+  },
+
   setUser: (user) => {
     const normalized = normalizeUser(user);
     writeStorage('user', normalized ? JSON.stringify(normalized) : null);
@@ -87,7 +91,7 @@ export const useAuthStore = create((set, get) => ({
       : null;
 
     if (access) get().setToken(access);
-    if (refresh) writeStorage('refreshToken', refresh);
+    if (refresh) get().setRefreshToken(refresh);
 
     try {
       const meRes = await authAPI.getMe();
@@ -117,35 +121,60 @@ export const useAuthStore = create((set, get) => ({
     const cachedAccess = readStorage('accessToken');
     const cachedUser = readStoredUser();
 
-    if (cachedAccess) {
-      set({ accessToken: cachedAccess, user: cachedUser, isAuthenticated: true, isLoading: false });
+    if (cachedAccess || cachedUser) {
+      set({ accessToken: cachedAccess, user: cachedUser, isAuthenticated: true, isLoading: true });
       try {
         const meRes = await authAPI.getMe();
         get().setUser(meRes.data);
         return;
       } catch (error) {
-        if (error?.response?.status !== 401 || !refresh) {
-          set({ isLoading: false });
+        const status = error?.response?.status;
+        if (status !== 401 || !refresh) {
+          if (status && status < 500) get().clearSession();
+          else set({ isLoading: false });
           return;
         }
       }
     }
 
     if (!refresh) {
-      if (cachedUser) set({ user: cachedUser, isAuthenticated: true, isLoading: false });
-      else get().clearSession();
+      if (!cachedAccess && !cachedUser) {
+        try {
+          const meRes = await authAPI.getMe();
+          get().setUser(meRes.data);
+          return;
+        } catch {
+          get().clearSession();
+          return;
+        }
+      }
+      if (cachedUser) {
+        set({ user: cachedUser, isAuthenticated: true, isLoading: false });
+      } else {
+        get().clearSession();
+      }
       return;
     }
 
     try {
       const tokenRes = await authAPI.refreshToken(refresh);
-      const { access } = getLoginTokens(tokenRes.data);
+      const { access, refresh: newRefresh } = getLoginTokens(tokenRes.data);
       if (access) get().setToken(access);
+      if (newRefresh) get().setRefreshToken(newRefresh);
+
       const meRes = await authAPI.getMe();
       get().setUser(meRes.data);
-    } catch {
-      if (cachedUser) set({ user: cachedUser, isAuthenticated: true, isLoading: false });
-      else get().clearSession();
+    } catch (error) {
+      const status = error?.response?.status;
+      if (!status || status >= 500) {
+        if (cachedUser || cachedAccess) {
+          set({ user: cachedUser, accessToken: cachedAccess, isAuthenticated: true, isLoading: false });
+        } else {
+          set({ isLoading: false });
+        }
+        return;
+      }
+      get().clearSession();
     }
   },
 

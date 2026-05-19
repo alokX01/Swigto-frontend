@@ -16,7 +16,7 @@ export const useProfileStore = create((set, get) => ({
       set({ profile, isLoading: false });
       return profile;
     } catch (err) {
-      set({ error: err.response?.data?.detail || err.message, isLoading: false });
+      set({ profile: null, isLoading: false });
       return null;
     }
   },
