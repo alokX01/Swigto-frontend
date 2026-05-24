@@ -95,9 +95,12 @@ export const useCartStore = create((set, get) => ({
     return cart;
   },
 
-  removeItem: async (id) => {
-    await cartAPI.removeItem(id);
-    await get().fetchCart();
+  removeItem: async (id, data = {}) => {
+    try {
+      await cartAPI.removeItem(id, data);
+    } finally {
+      await get().fetchCart();
+    }
   },
 
   clearCart: async () => {

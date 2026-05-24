@@ -5,7 +5,8 @@ import { Search, Star, Clock, MapPin, X, Leaf, Drumstick, Dumbbell, Zap, Tag, Ut
 import { restaurantsAPI, searchAPI } from '@/api/restaurants';
 import { useLocationStore } from '@/store/locationStore';
 import { useAuthStore } from '@/store/authStore';
-import { debounce } from '@/lib/utils';
+import { useOrderStore } from '@/store/orderStore';
+import { debounce, formatDate, resolveMediaUrl } from '@/lib/utils';
 import { T, C, S } from '@/lib/stitch';
 
 const QUICK_CATEGORIES = [
@@ -27,10 +28,11 @@ export default function HomePage() {
   const [page, setPage] = useState(1);
   const selectedCity = useLocationStore((s) => s.selectedCity);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const { orders, fetchOrders } = useOrderStore();
 
   const { data: restaurantsData, isLoading } = useQuery({
     queryKey: ['restaurants', selectedCity, selectedCuisine, page],
-    queryFn: () => restaurantsAPI.list({ cuisine_type: selectedCuisine || undefined, page, page_size: 12 }),
+    queryFn: () => restaurantsAPI.list({ city: selectedCity || undefined, cuisine_type: selectedCuisine || undefined, page, page_size: 12 }),
     keepPreviousData: true,
   });
 
@@ -44,10 +46,29 @@ export default function HomePage() {
 
   useEffect(() => { fetchSuggestions(searchQuery); }, [searchQuery, fetchSuggestions]);
 
+  useEffect(() => {
+    if (isAuthenticated) fetchOrders({ page_size: 5 }).catch(() => {});
+  }, [fetchOrders, isAuthenticated]);
+
   const handleSearchSubmit = (q) => {
     if (!q.trim()) return;
     navigate(`/search?q=${encodeURIComponent(q)}`);
   };
+
+  const handleQuickCategory = (filter) => {
+    const targets = {
+      vegetarian: '/search?q=veg&is_veg=true',
+      non_veg: '/search?q=chicken&is_veg=false',
+      healthy: '/search?q=healthy',
+      fast: '/search?q=restaurant&ordering=average_preparation_time',
+      offers: '/search?q=restaurant&is_premium=true',
+      cuisines: '/search?q=',
+      top_rated: '/search?q=restaurant&ordering=-average_rating',
+    };
+    navigate(targets[filter] || '/search');
+  };
+
+  const recentOrders = orders.slice(0, 3);
 
   return (
     <div style={{ maxWidth: 1600, margin: '0 auto', width: '100%', padding: `0 ${S.gutter * 1.5}px`, paddingBottom: 100 }}>
@@ -112,7 +133,7 @@ export default function HomePage() {
           {QUICK_CATEGORIES.map((cat, i) => {
             const Icon = cat.icon;
             return (
-              <div key={i} style={{ background: C.surface, border: `1px solid ${C.outlineVariant}`, borderRadius: 16, padding: 16, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}
+              <div key={i} onClick={() => handleQuickCategory(cat.filter)} style={{ background: C.surface, border: `1px solid ${C.outlineVariant}`, borderRadius: 16, padding: 16, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}
                 onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.08)'; }}
                 onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 10px rgba(0,0,0,0.02)'; }}>
                 <div style={{ width: 48, height: 48, background: cat.bg, color: cat.color, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -125,13 +146,40 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Order Again (Mocked to match design) */}
+      {/* Order Again */}
       <section style={{ marginBottom: 64 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
           <h2 style={{ ...T.headlineMd, color: C.onSurface }}>Order Again</h2>
           <Link to="/orders" style={{ ...T.labelLg, color: C.primary, textDecoration: 'none', fontWeight: 600 }}>View History</Link>
         </div>
         <div style={{ display: 'flex', gap: 16, overflowX: 'auto', paddingBottom: 8 }}>
+          {recentOrders.length > 0 ? recentOrders.map((order) => {
+            const restaurantId = order.restaurant || order.restaurant_id;
+            const target = restaurantId ? `/restaurant/${restaurantId}` : `/orders/${order.id}`;
+
+            return (
+              <Link key={order.id} to={target} style={{ minWidth: 260, background: '#F8F6FA', borderRadius: 16, border: `1px solid ${C.outlineVariant}50`, padding: 12, display: 'flex', gap: 12, color: 'inherit', textDecoration: 'none' }}>
+                <div style={{ width: 64, height: 64, borderRadius: 12, overflow: 'hidden', background: C.surfaceContainer, flexShrink: 0 }}>
+                  {order.restaurant_image ? <img src={resolveMediaUrl(order.restaurant_image)} alt={order.restaurant_name || 'Restaurant'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>Food</div>}
+                </div>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  <div>
+                    <h4 style={{ ...T.labelLg, fontWeight: 700, color: C.onSurface, margin: 0 }}>{order.restaurant_name || 'Previous order'}</h4>
+                    <p style={{ ...T.labelSm, color: C.onSurfaceVariant, margin: 0 }}>{order.placed_at ? `Ordered ${formatDate(order.placed_at)}` : `${order.item_count || order.items?.length || 0} items`}</p>
+                  </div>
+                  <span style={{ alignSelf: 'flex-start', background: '#FCECE4', color: C.saffron, borderRadius: 8, padding: '4px 12px', ...T.labelSm, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4, marginTop: 8 }}>
+                    Order Again
+                  </span>
+                </div>
+              </Link>
+            );
+          }) : (
+            <div style={{ minWidth: 260, background: '#F8F6FA', borderRadius: 16, border: `1px solid ${C.outlineVariant}50`, padding: 16 }}>
+              <p style={{ ...T.bodySm, color: C.onSurfaceVariant, margin: 0 }}>{isAuthenticated ? 'Your recent orders will appear here.' : 'Sign in to see your recent orders.'}</p>
+            </div>
+          )}
+        </div>
+        <div style={{ display: 'none' }}>
           {/* Card 1 */}
           <div style={{ minWidth: 260, background: '#F8F6FA', borderRadius: 16, border: `1px solid ${C.outlineVariant}50`, padding: 12, display: 'flex', gap: 12 }}>
             <img src="https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?q=80&w=200&auto=format&fit=crop" alt="Biryani" style={{ width: 64, height: 64, borderRadius: 12, objectFit: 'cover' }} />
@@ -179,10 +227,10 @@ export default function HomePage() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28, flexWrap: 'wrap', gap: 16 }}>
           <h2 style={{ ...T.headlineMd, color: C.onSurface }}>Restaurants Near You</h2>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button style={{ background: C.surface, border: `1px solid ${C.outlineVariant}`, borderRadius: 999, padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 8, ...T.bodySm, cursor: 'pointer' }}>
+            <button onClick={() => navigate('/search?q=restaurant&ordering=-average_rating')} style={{ background: C.surface, border: `1px solid ${C.outlineVariant}`, borderRadius: 999, padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 8, ...T.bodySm, cursor: 'pointer' }}>
               Sort <SlidersHorizontal size={14} />
             </button>
-            <button style={{ background: C.surface, border: `1px solid ${C.outlineVariant}`, borderRadius: 999, padding: '8px 16px', ...T.bodySm, cursor: 'pointer' }}>
+            <button onClick={() => navigate('/search')} style={{ background: C.surface, border: `1px solid ${C.outlineVariant}`, borderRadius: 999, padding: '8px 16px', ...T.bodySm, cursor: 'pointer' }}>
               Cuisines
             </button>
           </div>

@@ -11,14 +11,14 @@ const normalizeCartAddPayload = (data = {}) => {
 };
 
 const normalizeCartUpdatePayload = (data = {}) => {
-  const payload = {
+  return {
     menu_item: data.menu_item,
     variant: data.variant ?? null,
     quantity: Number(data.quantity || 1),
   };
-  if (!payload.variant) delete payload.variant;
-  return payload;
 };
+
+const shouldTryCollectionRoute = (error) => [404, 405, 500].includes(error?.response?.status);
 
 export const cartAPI = {
   get: () => api.get('/cart/'),
@@ -29,9 +29,17 @@ export const cartAPI = {
     try {
       return await api.patch(`/cart/items/${id}/`, payload);
     } catch (error) {
-      if (error?.response?.status !== 500) throw error;
+      if (!shouldTryCollectionRoute(error)) throw error;
       return api.patch('/cart/items/', payload);
     }
   },
-  removeItem: (id) => api.delete(`/cart/items/${id}/`),
+  removeItem: async (id, data = {}) => {
+    const payload = normalizeCartUpdatePayload(data);
+    try {
+      return await api.delete(`/cart/items/${id}/`);
+    } catch (error) {
+      if (!shouldTryCollectionRoute(error) || !payload.menu_item) throw error;
+      return api.delete('/cart/items/', { data: payload });
+    }
+  },
 };

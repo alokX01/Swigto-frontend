@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Star, Clock, ArrowLeft, ShoppingCart, Search, X } from 'lucide-react';
+import { Star, Clock, ArrowLeft, ShoppingCart, Search, X, Minus, Plus } from 'lucide-react';
 import { restaurantsAPI } from '@/api/restaurants';
 import { useCartStore } from '@/store/cartStore';
 import { useAuthStore } from '@/store/authStore';
@@ -21,25 +21,44 @@ export default function RestaurantPage() {
   const [selectedVariantId, setSelectedVariantId] = useState('');
   const debouncedSearchMenu = useDebounce(searchMenu, 300);
   const addItem = useCartStore((s) => s.addItem);
+  const updateItem = useCartStore((s) => s.updateItem);
+  const removeItem = useCartStore((s) => s.removeItem);
+  const fetchCart = useCartStore((s) => s.fetchCart);
   const cartItems = useCartStore((s) => s.items);
   const cart = useCartStore((s) => s.cart);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const [busyCartKey, setBusyCartKey] = useState(null);
 
   const { data: restaurant, isLoading: loadingR } = useQuery({ queryKey: ['restaurant', id], queryFn: () => restaurantsAPI.get(id) });
   const { data: categoriesData } = useQuery({ queryKey: ['categories', id], queryFn: () => restaurantsAPI.getCategories(id, { page_size: 50 }) });
-  const { data: menuData, isLoading: loadingMenu } = useQuery({ queryKey: ['menuItems', id, selectedCategory, debouncedSearchMenu], queryFn: () => restaurantsAPI.getMenuItems(id, { category: selectedCategory || undefined, search: debouncedSearchMenu || undefined, page_size: 100 }) });
+  const { data: menuData, isLoading: loadingMenu } = useQuery({
+    queryKey: ['menuItems', id, selectedCategory, debouncedSearchMenu],
+    queryFn: () => restaurantsAPI.getMenuItems(id, {
+      category: selectedCategory ? String(selectedCategory) : undefined,
+      search: debouncedSearchMenu || undefined,
+      page_size: 100,
+    }),
+  });
 
   const r = restaurant?.data;
   const categories = categoriesData?.data?.results || categoriesData?.data || [];
   const menuItems = menuData?.data?.results || menuData?.data || [];
-  const itemCount = cartItems.reduce((sum, i) => sum + (i.quantity || 0), 0);
-  const cartTotal = toNumber(cart?.total_amount) || cartItems.reduce((sum, item) => {
+  const activeCartItems = cart?.items?.length ? cart.items : cartItems;
+  const itemCount = activeCartItems.reduce((sum, i) => sum + (i.quantity || 0), 0);
+  const cartTotal = toNumber(cart?.total_amount) || activeCartItems.reduce((sum, item) => {
     const unit = toNumber(item.unit_price);
     return sum + (toNumber(item.subtotal) || unit * Number(item.quantity || 1));
   }, 0);
 
+  useEffect(() => {
+    if (isAuthenticated) fetchCart().catch(() => {});
+  }, [fetchCart, isAuthenticated]);
+
   const getAvailableVariants = (item) => (item?.variants || []).filter((variant) => variant.is_available !== false);
   const getItemPrice = (item) => toNumber(item?.effective_price) || toNumber(item?.base_price);
+  const findCartItem = (menuItemId, variantId = null) => activeCartItems.find((cartItem) => (
+    String(cartItem.menu_item) === String(menuItemId) && String(cartItem.variant || '') === String(variantId || '')
+  ));
 
   const addToCart = async (item, variant = null) => {
     if (!isAuthenticated) {
@@ -77,8 +96,37 @@ export default function RestaurantPage() {
     await addToCart(item);
   };
 
+  const handleCartQty = async (cartItem, delta) => {
+    if (!cartItem) return;
+    const nextQuantity = Number(cartItem.quantity || 1) + delta;
+    const key = `${cartItem.menu_item}-${cartItem.variant || 'base'}`;
+    setBusyCartKey(key);
+    try {
+      if (nextQuantity < 1) {
+        await removeItem(cartItem.id, {
+          menu_item: cartItem.menu_item,
+          variant: cartItem.variant,
+          quantity: cartItem.quantity || 1,
+        });
+        toast.success('Item removed');
+      } else {
+        await updateItem(cartItem.id, {
+          menu_item: cartItem.menu_item,
+          variant: cartItem.variant,
+          quantity: nextQuantity,
+        });
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.error?.message || error.response?.data?.detail || 'Failed to update cart');
+    } finally {
+      setBusyCartKey(null);
+    }
+  };
+
   const variantOptions = getAvailableVariants(variantItem);
   const selectedVariant = variantOptions.find((variant) => variant.id === selectedVariantId) || variantOptions[0];
+  const selectedVariantCartItem = variantItem && selectedVariant ? findCartItem(variantItem.id, selectedVariant.id) : null;
+  const selectedVariantBusy = selectedVariantCartItem ? busyCartKey === `${selectedVariantCartItem.menu_item}-${selectedVariantCartItem.variant || 'base'}` : false;
 
   if (loadingR) return (
     <div style={{ maxWidth: 1280, margin: '0 auto', padding: '24px' }}>
@@ -124,7 +172,7 @@ export default function RestaurantPage() {
               background: !selectedCategory ? C.saffron : '#fff', color: !selectedCategory ? '#fff' : C.onSurfaceVariant }}>All</button>
           {categories.map(c => {
             const on = selectedCategory === c.id;
-            return <button key={c.id} onClick={() => setSelectedCategory(on ? null : c.id)}
+            return <button key={c.id} onClick={() => setSelectedCategory(on ? null : String(c.id))}
               style={{ flexShrink: 0, padding: '6px 16px', borderRadius: 999, ...T.labelLg, fontWeight: 500, cursor: 'pointer', border: on ? 'none' : `1px solid ${C.outlineVariant}`,
                 background: on ? C.saffron : '#fff', color: on ? '#fff' : C.onSurfaceVariant }}>{c.name}</button>;
           })}
@@ -135,7 +183,12 @@ export default function RestaurantPage() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {loadingMenu ? [1,2,3].map(i => <div key={i} style={{ height: 96, borderRadius: 16, background: C.surfaceContainer, animation: 'skeleton 1.5s ease-in-out infinite' }} />) :
           menuItems.length === 0 ? <p style={{ textAlign: 'center', padding: '48px 0', ...T.bodySm, color: C.outline }}>No items</p> :
-          menuItems.map(item => (
+          menuItems.map(item => {
+            const variants = getAvailableVariants(item);
+            const cartItem = variants.length > 0 ? null : findCartItem(item.id);
+            const busy = busyCartKey === `${item.id}-base`;
+
+            return (
             <div key={item.id} style={{ display: 'flex', gap: 16, padding: 16, ...card, borderRadius: 16 }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
@@ -146,7 +199,7 @@ export default function RestaurantPage() {
                 </div>
                 <h3 style={{ ...T.labelLg, fontWeight: 600, color: C.onSurface, margin: 0 }}>{item.name}</h3>
                 <p style={{ ...T.labelLg, fontWeight: 600, color: C.onSurface, marginTop: 2 }}>
-                  {getAvailableVariants(item).length > 0 ? `From ${formatCurrency(getItemPrice(item))}` : formatCurrency(getItemPrice(item))}
+                  {variants.length > 0 ? `From ${formatCurrency(getItemPrice(item))}` : formatCurrency(getItemPrice(item))}
                 </p>
                 {item.description && <p style={{ ...T.labelSm, color: C.outline, marginTop: 4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.description}</p>}
               </div>
@@ -155,15 +208,28 @@ export default function RestaurantPage() {
                   {item.image ? <img src={resolveMediaUrl(item.image)} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> :
                     <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, background: '#FFF3ED' }}>🍽️</div>}
                 </div>
-                <button onClick={() => handleAdd(item)} disabled={item.is_available === false}
-                  style={{ position: 'absolute', bottom: -8, left: '50%', transform: 'translateX(-50%)', background: '#fff', border: `2px solid ${C.saffron}`, color: C.saffron, padding: '4px 20px', borderRadius: 8, ...T.labelMd, fontWeight: 700, cursor: 'pointer', transition: 'all 0.15s', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', opacity: item.is_available === false ? 0.4 : 1 }}
-                  onMouseEnter={e => { e.currentTarget.style.background = C.saffron; e.currentTarget.style.color = '#fff'; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.color = C.saffron; }}>
-                  {item.is_available !== false ? (getAvailableVariants(item).length > 0 ? 'CHOOSE' : 'ADD') : 'N/A'}
-                </button>
+                {cartItem ? (
+                  <div style={{ position: 'absolute', bottom: -8, left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: 8, background: '#fff', border: `2px solid ${C.saffron}`, color: C.saffron, borderRadius: 8, padding: '3px 8px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
+                    <button type="button" onClick={() => handleCartQty(cartItem, -1)} disabled={busy} style={{ width: 24, height: 24, border: 'none', background: 'transparent', color: C.saffron, cursor: busy ? 'default' : 'pointer', padding: 0 }}>
+                      <Minus size={15} />
+                    </button>
+                    <span style={{ ...T.labelMd, fontWeight: 900, minWidth: 18, textAlign: 'center' }}>{cartItem.quantity || 1}</span>
+                    <button type="button" onClick={() => handleCartQty(cartItem, 1)} disabled={busy} style={{ width: 24, height: 24, border: 'none', background: 'transparent', color: C.saffron, cursor: busy ? 'default' : 'pointer', padding: 0 }}>
+                      <Plus size={15} />
+                    </button>
+                  </div>
+                ) : (
+                  <button onClick={() => handleAdd(item)} disabled={item.is_available === false || busy}
+                    style={{ position: 'absolute', bottom: -8, left: '50%', transform: 'translateX(-50%)', background: '#fff', border: `2px solid ${C.saffron}`, color: C.saffron, padding: '4px 20px', borderRadius: 8, ...T.labelMd, fontWeight: 700, cursor: 'pointer', transition: 'all 0.15s', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', opacity: item.is_available === false ? 0.4 : 1 }}
+                    onMouseEnter={e => { e.currentTarget.style.background = C.saffron; e.currentTarget.style.color = '#fff'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.color = C.saffron; }}>
+                    {item.is_available !== false ? (variants.length > 0 ? 'CHOOSE' : 'ADD') : 'N/A'}
+                  </button>
+                )}
               </div>
             </div>
-          ))
+            );
+          })
         }
       </div>
 
@@ -198,13 +264,25 @@ export default function RestaurantPage() {
             </div>
 
             <div style={{ padding: 16, borderTop: `1px solid ${C.outlineVariant}` }}>
-              <button
-                onClick={() => addToCart(variantItem, selectedVariant)}
-                disabled={!selectedVariant}
-                style={{ width: '100%', height: 52, border: 'none', borderRadius: 14, background: selectedVariant ? C.saffron : C.surfaceContainer, color: selectedVariant ? '#fff' : C.onSurfaceVariant, ...T.titleMd, fontWeight: 800, cursor: selectedVariant ? 'pointer' : 'not-allowed' }}
-              >
-                Add {selectedVariant ? `| ${formatCurrency(selectedVariant.price)}` : ''}
-              </button>
+              {selectedVariantCartItem ? (
+                <div style={{ width: '100%', height: 52, borderRadius: 14, border: `2px solid ${C.saffron}`, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 18, color: C.saffron, background: '#fff' }}>
+                  <button type="button" onClick={() => handleCartQty(selectedVariantCartItem, -1)} disabled={selectedVariantBusy} style={{ width: 34, height: 34, border: 'none', borderRadius: 999, background: '#FFF3ED', color: C.saffron, cursor: selectedVariantBusy ? 'default' : 'pointer' }}>
+                    <Minus size={18} />
+                  </button>
+                  <span style={{ ...T.titleMd, fontWeight: 900 }}>{selectedVariantCartItem.quantity || 1} in cart</span>
+                  <button type="button" onClick={() => handleCartQty(selectedVariantCartItem, 1)} disabled={selectedVariantBusy} style={{ width: 34, height: 34, border: 'none', borderRadius: 999, background: '#FFF3ED', color: C.saffron, cursor: selectedVariantBusy ? 'default' : 'pointer' }}>
+                    <Plus size={18} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => addToCart(variantItem, selectedVariant)}
+                  disabled={!selectedVariant}
+                  style={{ width: '100%', height: 52, border: 'none', borderRadius: 14, background: selectedVariant ? C.saffron : C.surfaceContainer, color: selectedVariant ? '#fff' : C.onSurfaceVariant, ...T.titleMd, fontWeight: 800, cursor: selectedVariant ? 'pointer' : 'not-allowed' }}
+                >
+                  Add {selectedVariant ? `| ${formatCurrency(selectedVariant.price)}` : ''}
+                </button>
+              )}
             </div>
           </div>
         </div>

@@ -12,6 +12,9 @@ export default function SearchPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const initialQuery = searchParams.get('q') || '';
+  const isVeg = searchParams.get('is_veg') || undefined;
+  const ordering = searchParams.get('ordering') || undefined;
+  const isPremium = searchParams.get('is_premium') || undefined;
   
   const [query, setQuery] = useState(initialQuery);
   const debouncedQuery = useDebounce(query, 500);
@@ -24,15 +27,15 @@ export default function SearchPage() {
   const selectedCity = useLocationStore((s) => s.selectedCity);
 
   const { data: restData, isLoading: loadingRest } = useQuery({
-    queryKey: ['searchRestaurants', debouncedQuery, selectedCuisines, selectedCity],
-    queryFn: () => searchAPI.restaurants({ q: debouncedQuery || undefined, cuisine_type: selectedCuisines.length > 0 ? selectedCuisines : undefined, city: selectedCity }),
-    enabled: !!debouncedQuery,
+    queryKey: ['searchRestaurants', debouncedQuery, selectedCuisines, selectedCity, ordering, isPremium],
+    queryFn: () => searchAPI.restaurants({ q: debouncedQuery || undefined, cuisine_type: selectedCuisines.length > 0 ? selectedCuisines : undefined, city: selectedCity, ordering, is_premium: isPremium }),
+    enabled: !!debouncedQuery || selectedCuisines.length > 0 || !!ordering || !!isPremium,
   });
 
   const { data: menuData, isLoading: loadingMenu } = useQuery({
-    queryKey: ['searchMenuItems', debouncedQuery],
-    queryFn: () => searchAPI.menuItems({ q: debouncedQuery }),
-    enabled: !!debouncedQuery,
+    queryKey: ['searchMenuItems', debouncedQuery, isVeg],
+    queryFn: () => searchAPI.menuItems({ q: debouncedQuery || undefined, is_veg: isVeg }),
+    enabled: !!debouncedQuery || !!isVeg,
   });
 
   const restaurants = restData?.data?.results || restData?.data || [];
@@ -44,6 +47,10 @@ export default function SearchPage() {
   }, 300), []);
 
   useEffect(() => { fetchSuggestions(query); }, [query, fetchSuggestions]);
+
+  useEffect(() => {
+    setQuery(initialQuery);
+  }, [initialQuery]);
 
   const handleSearchSubmit = (q) => {
     if (!q.trim()) return;

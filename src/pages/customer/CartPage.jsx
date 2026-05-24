@@ -36,7 +36,11 @@ export default function CartPage() {
     setBusyItem(item.id);
     try {
       if (nextQuantity < 1) {
-        await removeItem(item.id);
+        await removeItem(item.id, {
+          menu_item: item.menu_item,
+          variant: item.variant,
+          quantity: item.quantity || 1,
+        });
         toast.success('Item removed');
       } else {
         await updateItem(item.id, {
